@@ -940,7 +940,8 @@
   <script>
     const { createClient } = supabase;
     const supabaseUrl = 'https://gitawjqusqphthoaozme.supabase.co';
-    const supabaseKey = 'sb_publishable_-MqEtLa4NypB5JATDF76Rw_u95hYahW'
+    const supabaseKey = 'sb_publishable_-MqEtLa4NypB5JATDF76Rw_u95hYahW';
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
     let currentUser = localStorage.getItem('chat_active_user') || null;
     let isRegisterMode = false;
@@ -1349,16 +1350,18 @@
       content.innerHTML = `<div style="font-size:12px; color:var(--text-sub); padding:10px;">Loading friends...</div>`; //
 
       try {
+        if (!currentUser) throw new Error('You are not signed in.');
+
         // Fetch current user's friends array
         const { data, error } = await supabaseClient
           .from('users')
           .select('friends')
-          .eq('username', currentUser)
-          .single(); //
+          .ilike('username', currentUser)
+          .maybeSingle(); //
 
         if (error) throw error;
 
-        const friends = data?.friends || []; //[cite: 9]
+        const friends = Array.isArray(data?.friends) ? data.friends : []; //[cite: 9]
 
         if (friends.length === 0) {
           content.innerHTML = `<div style="font-size:12px; color:var(--text-sub); padding:10px;">No friends yet. Add someone!</div>`; //[cite: 9]
@@ -1370,6 +1373,7 @@
         friends.forEach(friend => { //[cite: 9]
           // Support for both string arrays or object arrays, depending on how your DB saves them
           const friendName = typeof friend === 'string' ? friend : friend.username;
+          if (!friendName) return;
           
           // Use the global avatar cache from your app, or fallback to the initial block[cite: 9]
           const avatarData = userAvatars[friendName.toLowerCase()];
@@ -1390,7 +1394,8 @@
         content.innerHTML = htmlContent; 
 
       } catch (err) {
-        content.innerHTML = `<div style="font-size:12px; color:var(--error-red); padding:10px;">Error loading friends.</div>`; //[cite: 9]
+        const message = err && err.message ? ` ${escapeHtml(err.message)}` : '';
+        content.innerHTML = `<div style="font-size:12px; color:var(--error-red); padding:10px;">Error loading friends.${message}</div>`; //[cite: 9]
         console.error("Failed to load friends:", err);
       }
     }
@@ -2068,7 +2073,7 @@
           userSpaces.push({ id: 'bugs', name: 'Bugs 🐛', created_by: 'system', image: null, members: [] });
         }
         if (!userSpaces.some(s => s.id === 'updates')) {
-          userSpaces.push({ id: 'updates', name: 'Updates 📢', created_by: 'Jeffy1201', image: null, members: [] });
+          userSpaces.push({ id: 'updates', name: 'Updates 📢', created_by: 'JettyBonBoi', image: null, members: [] });
         }
 
         let hiddenDmTargets = [];
@@ -2223,7 +2228,7 @@
     function isAllowedToPostInUpdates() {
       if (!currentUser) return false;
       const lower = currentUser.toLowerCase();
-      return lower === 'jeffy1201' || lower === 'announcementbot';
+      return lower === 'jettybonboi' || lower === 'announcementbot';
     }
 
     function updateRoomPermissions() {
@@ -2236,7 +2241,7 @@
 
       if (isUpdateSpace && !allowed) {
         input.disabled = true;
-        input.placeholder = "Only Jeffy1201 and AnnouncementBot can post in this space.";
+        input.placeholder = "Only JettyBonboi and AnnouncementBot can post in this space.";
         sendBtn.disabled = true;
         sendBtn.style.opacity = '0.5';
         sendBtn.style.cursor = 'not-allowed';
@@ -2841,7 +2846,7 @@
 
     async function dispatchMessagePayload(payloadText) {
       if ((currentRoom === 'updates' || currentRoom === 'space_update') && !isAllowedToPostInUpdates()) {
-        alert("Only Jeffy1201 and AnnouncementBot are permitted to send messages in the Updates space.");
+        alert("Only JettyBonBoi and AnnouncementBot are permitted to send messages in the Updates space.");
         return;
       }
 
