@@ -1,6 +1,5 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "friendly",
+  "name": "googol",
   "compatibility_date": "2026-08-15",
   "observability": {
     "enabled": true
