@@ -1,0 +1,3259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Googol Chat</title>
+  
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231a73e8'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='sans-serif'>G</text></svg>">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --googol-blue: #1a73e8;
+      --googol-blue-hover: #1557b0;
+      --googol-bg: #f8f9fa;
+      --bubble-self: #e8f0fe;
+      --bubble-other: #ffffff;
+      --border-color: #dadce0;
+      --text-main: #202124;
+      --text-sub: #5f6368;
+      --sidebar-bg: #f1f3f4;
+      --active-item: #e8f0fe;
+      --active-text: #174ea6;
+      --error-red: #d93025;
+      --card-bg: #ffffff;
+      --chat-bg: #fdfdfd;
+      --input-bg: #ffffff;
+    }
+
+    body.dark-mode {
+      --googol-bg: #18191a;
+      --bubble-self: #1e3a5f;
+      --bubble-other: #242526;
+      --border-color: #393a3b;
+      --text-main: #e4e6eb;
+      --text-sub: #b0b3b8;
+      --sidebar-bg: #18191a;
+      --active-item: #263951;
+      --active-text: #4db8ff;
+      --card-bg: #242526;
+      --chat-bg: #18191a;
+      --input-bg: #3a3b3c;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--googol-bg);
+      color: var(--text-main);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      overflow: hidden;
+      transition: background-color 0.2s, color 0.2s;
+    }
+
+    /* Container to hold the avatar and the dot together */
+    .avatar-container {
+      position: relative;
+      display: inline-block;
+    }
+
+    /* The base style for the status dot */
+    .status-indicator {
+      position: absolute;
+      bottom: -2px;
+      right: -2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid #ffffff; /* Matches background to create a cutout effect */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+    }
+
+    /* Specific status colors */
+    .status-active { background-color: #23a559; } /* Green */
+    .status-away { background-color: #80848e; } /* Gray */
+    .status-afk { 
+      background-color: #2b2d31; 
+      border-color: #2b2d31; /* Optional: adjust if you want the sleeping icon to look different */
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 380px;
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .auth-title { font-size: 20px; font-weight: 600; text-align: center; }
+    .auth-field { display: flex; flex-direction: column; gap: 6px; position: relative; }
+    .auth-field label { font-size: 12px; font-weight: 600; color: var(--text-sub); }
+    .auth-input { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; font-size: 14px; outline: none; background: var(--input-bg); color: var(--text-main); }
+    textarea.auth-input { resize: none; font-family: inherit; }
+    .auth-btn { background: var(--googol-blue); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+    .auth-toggle { font-size: 13px; color: var(--googol-blue); text-align: center; cursor: pointer; }
+    .auth-error { font-size: 12px; color: var(--error-red); text-align: left; }
+
+    .app-container {
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      background: var(--card-bg);
+    }
+
+    /* Members Sidebar Styling */
+    .members-sidebar {
+      width: 260px;
+      background: #1e1f22; /* Dark theme default - adjust to match your background */
+      border-left: 1px solid #2b2d31;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      font-family: 'Google Sans', Roboto, -apple-system, sans-serif;
+      color: #dbdee1;
+    }
+
+    .members-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #2b2d31;
+    }
+
+    .members-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #949ba4;
+    }
+
+    .member-count-badge {
+      background: #2b2d31;
+      color: #1a73e8; /* Google Blue Accent */
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .members-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+    }
+
+    /* Individual Member Item */
+    .member-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      transition: background 0.2s ease;
+      cursor: pointer;
+    }
+
+    .member-card:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    .member-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #1a73e8;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.95rem;
+      text-transform: uppercase;
+      flex-shrink: 0;
+    }
+
+    .member-name {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #f2f3f5;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .member-you-tag {
+      font-size: 0.7rem;
+      color: #1a73e8;
+      background: rgba(26, 115, 232, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: auto;
+    }
+
+    /* Animated Pulse Skeleton for Loading */
+    .member-card.skeleton {
+      pointer-events: none;
+    }
+
+    .skeleton-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #2b2d31;
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    .skeleton-text {
+      height: 14px;
+      width: 60%;
+      border-radius: 4px;
+      background: #2b2d31;
+      animation: pulse 1.5s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+      100% { opacity: 0.4; }
+    }
+
+    .right-sidebar {
+      width: 240px;
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+    }
+    .sidebar-tabs { display: flex; gap: 5px; margin-bottom: 10px; }
+    .sidebar-tabs button { flex: 1; padding: 6px; border: none; border-radius: 6px; cursor: pointer; background: var(--card-bg); color: var(--text-main); }
+    .sidebar-tabs button.active-tab { background: var(--googol-blue); color: white; }
+    .right-sidebar-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .user-row { display: flex; align-items: center; gap: 8px; font-size: 13px; position: relative; }
+    .status-indicator { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--card-bg); position: absolute; bottom: -2px; left: 16px; }
+    .status-online { background-color: #34a853; }
+    .status-dnd { background-color: var(--error-red); }
+    .mailbox-btn { margin-top: 10px; padding: 10px; background: var(--active-item); color: var(--active-text); border: none; border-radius: 6px; cursor: pointer; font-weight: bold; }
+
+    .sidebar {
+      width: 260px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+      transition: width 0.22s ease-in-out;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .sidebar.collapsed { width: 68px; }
+
+    .sidebar.collapsed .app-name,
+    .sidebar.collapsed .section-title,
+    .sidebar.collapsed .add-btn,
+    .sidebar.collapsed .nav-item-left span,
+    .sidebar.collapsed .pfp-hint,
+    .sidebar.collapsed .logout-link,
+    .sidebar.collapsed .user-profile {
+      display: none !important;
+    }
+
+    .sidebar.collapsed .sidebar-header { padding: 12px 6px; justify-content: center; }
+    .sidebar.collapsed .header-brand { display: none; }
+    .sidebar.collapsed .nav-item { justify-content: center; padding: 10px 0; border-radius: 12px; }
+    .sidebar.collapsed .nav-item-left { gap: 0; justify-content: center; }
+    .sidebar.collapsed .sidebar-footer { justify-content: center; padding: 12px 0; }
+
+    .collapse-btn {
+      background: var(--card-bg);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      font-size: 12px;
+      color: var(--text-sub);
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s, transform 0.2s;
+    }
+    .collapse-btn:hover { background: var(--active-item); color: var(--googol-blue); }
+
+    .sidebar-header {
+      padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      background: var(--card-bg);
+    }
+
+    .header-brand { display: flex; align-items: center; gap: 10px; }
+
+    .logo-icon {
+      width: 32px; height: 32px;
+      background: var(--googol-blue);
+      color: white; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 16px; flex-shrink: 0;
+    }
+
+    .app-name { font-weight: 600; font-size: 15px; }
+
+    .sidebar-content {
+      flex: 1; overflow-y: auto; padding: 12px 8px;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+
+    .section-header { display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
+
+    .section-title {
+      font-size: 11px; font-weight: 700; color: var(--text-sub);
+      text-transform: uppercase; letter-spacing: 0.5px;
+    }
+
+    .add-btn { background: none; border: none; color: var(--googol-blue); font-size: 18px; font-weight: bold; cursor: pointer; line-height: 1; }
+
+    .nav-list { display: flex; flex-direction: column; gap: 4px; }
+
+    .nav-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 20px; font-size: 14px;
+      color: var(--text-main); cursor: pointer; user-select: none;
+      transition: background 0.15s;
+    }
+
+    .nav-item-left { display: flex; align-items: center; gap: 10px; overflow: hidden; }
+
+    .nav-item-left span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .nav-item:hover { background: rgba(0, 0, 0, 0.05); }
+    body.dark-mode .nav-item:hover { background: rgba(255, 255, 255, 0.08); }
+
+    .nav-item.active { background: var(--active-item); color: var(--active-text); font-weight: 600; }
+
+    .nav-icon { font-size: 15px; width: 22px; text-align: center; }
+
+    .unread-dot { width: 9px; height: 9px; background-color: var(--googol-blue); border-radius: 50%; flex-shrink: 0; }
+
+    .sidebar-footer {
+      padding: 12px 14px; border-top: 1px solid var(--border-color);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--card-bg);
+    }
+
+    .footer-left { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+
+    .profile-info { display: flex; flex-direction: column; }
+
+    .user-profile { font-size: 13px; font-weight: 600; color: var(--text-main); }
+    
+    .pfp-hint { font-size: 10px; color: var(--googol-blue); font-weight: 500; margin-top: 1px; }
+
+    .logout-link { font-size: 12px; color: var(--error-red); cursor: pointer; text-decoration: underline; }
+
+    .chat-main { flex: 1; display: flex; flex-direction: column; background: var(--card-bg); position: relative; }
+
+    .chat-header {
+      height: 57px; padding: 0 20px; border-bottom: 1px solid var(--border-color);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .room-title-display { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+
+    .status-badge {
+      display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub);
+      background: var(--sidebar-bg); padding: 4px 10px; border-radius: 12px;
+    }
+
+    .status-dot { width: 8px; height: 8px; background-color: #34a853; border-radius: 50%; }
+    .status-dot.syncing { background-color: #fbbc04; }
+
+    .chat-messages {
+      flex: 1; padding: 20px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 8px; background: var(--chat-bg);
+    }
+
+    .msg-group { display: flex; align-items: flex-start; gap: 10px; max-width: 75%; position: relative; }
+    .msg-group.self { align-self: flex-end; flex-direction: row-reverse; }
+    .msg-group.pending { opacity: 0.6; }
+    .msg-group.consecutive { margin-top: -4px; }
+    .msg-group:hover { background-color: rgba(0, 0, 0, 0.015); border-radius: 8px; }
+    body.dark-mode .msg-group:hover { background-color: rgba(255, 255, 255, 0.02); }
+
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%; color: white;
+      font-weight: bold; font-size: 14px; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; object-fit: cover; overflow: hidden; cursor: pointer;
+    }
+
+    .avatar.small { width: 24px; height: 24px; font-size: 11px; }
+
+    .msg-content { display: flex; flex-direction: column; }
+    .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; font-size: 11px; color: var(--text-sub); }
+    .msg-group.self .msg-header { justify-content: flex-end; }
+    .user-name { font-weight: 600; color: var(--text-main); }
+    .user-name:hover { text-decoration: underline; cursor: pointer; }
+
+    .quoted-reply {
+      background: rgba(0,0,0,0.06); border-left: 3px solid var(--googol-blue);
+      padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-bottom: 6px; color: var(--text-sub);
+    }
+    body.dark-mode .quoted-reply { background: rgba(255,255,255,0.08); }
+
+    .msg-bubble {
+      padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.4;
+      word-break: break-word; box-shadow: 0 1px 2px rgba(0,0,0,0.05); position: relative;
+    }
+
+    .msg-bubble img { max-width: 240px; max-height: 200px; border-radius: 10px; display: block; margin-top: 4px; }
+
+    .msg-delete-btn {
+      background: none; border: none; color: var(--text-sub); font-size: 11px;
+      cursor: pointer; opacity: 0; transition: opacity 0.15s; margin-left: 6px;
+    }
+    .msg-group:hover .msg-delete-btn { opacity: 0.7; }
+    .msg-delete-btn:hover { opacity: 1 !important; color: var(--error-red); }
+
+    .msg-deleted-text { font-style: italic; color: var(--text-sub); opacity: 0.85; }
+
+    .msg-group.other .msg-bubble { background: var(--bubble-other); border: 1px solid var(--border-color); border-top-left-radius: 4px; color: var(--text-main); }
+    .msg-group.self .msg-bubble { background: var(--bubble-self); border: 1px solid var(--border-color); border-top-right-radius: 4px; color: var(--text-main); }
+
+    .mention-tag { background-color: rgba(26, 115, 232, 0.15); color: var(--googol-blue); padding: 1px 6px; border-radius: 4px; font-weight: 600; cursor: pointer; }
+    .mention-tag.mention-me { background-color: #fbbc04; color: #202124; }
+
+    .chat-footer { padding: 8px 20px 16px; background: var(--card-bg); border-top: 1px solid var(--border-color); position: relative; }
+    
+    .typing-banner {
+      font-size: 12px; color: var(--googol-blue); font-style: italic;
+      padding: 2px 6px 6px; min-height: 20px; display: flex; align-items: center; gap: 6px;
+    }
+
+    .reply-banner-hint { font-size: 11px; color: var(--text-sub); margin-bottom: 4px; padding-left: 6px; user-select: none; }
+
+    .reply-banner {
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--sidebar-bg); border: 1px solid var(--border-color);
+      border-radius: 8px; padding: 6px 12px; font-size: 12px; margin-bottom: 8px;
+    }
+    .reply-banner-close { cursor: pointer; font-weight: bold; color: var(--text-sub); }
+
+    .spam-warning {
+      position: absolute; top: -30px; left: 20px; right: 20px;
+      background: var(--error-red); color: white; font-size: 12px; font-weight: 600;
+      padding: 4px 12px; border-radius: 6px; text-align: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15); animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .input-bar { display: flex; gap: 8px; align-items: center; }
+    .message-input { flex: 1; border: 1px solid var(--border-color); border-radius: 20px; padding: 10px 16px; font-size: 14px; outline: none; background: var(--input-bg); color: var(--text-main); }
+    .message-input:focus { border-color: var(--googol-blue); }
+    .send-btn { background: var(--googol-blue); color: white; border: none; border-radius: 20px; padding: 10px 20px; font-weight: 600; cursor: pointer; }
+    
+    .action-icon-btn {
+      background: none; border: 1px solid var(--border-color); border-radius: 50%;
+      width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; cursor: pointer; color: var(--text-sub); transition: background 0.15s;
+    }
+    .action-icon-btn:hover { background: rgba(0,0,0,0.05); color: var(--text-main); }
+    body.dark-mode .action-icon-btn:hover { background: rgba(255,255,255,0.08); }
+
+    .emoji-popover {
+      position: absolute; bottom: 64px; left: 20px; background: var(--card-bg);
+      border: 1px solid var(--border-color); border-radius: 24px; padding: 6px 12px;
+      display: flex; gap: 6px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12); z-index: 10;
+    }
+
+    .emoji-item { background: none; border: none; font-size: 20px; padding: 6px; cursor: pointer; border-radius: 50%; line-height: 1; }
+    .emoji-item:hover { background: rgba(0,0,0,0.05); }
+
+    .modal-overlay {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+
+    .modal-card {
+      background: var(--card-bg); color: var(--text-main); width: 380px; max-width: 90vw;
+      padding: 20px; border-radius: 12px; border: 1px solid var(--border-color);
+      display: flex; flex-direction: column; gap: 14px; position: relative;
+    }
+
+    .modal-title { font-weight: 600; font-size: 16px; }
+    .modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
+    .btn-secondary { background: var(--sidebar-bg); color: var(--text-main); border: 1px solid var(--border-color); padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+    .btn-primary { background: var(--googol-blue); color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+    .btn-danger { background: var(--error-red); color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; }
+
+    .suggestions-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px;
+      max-height: 150px; overflow-y: auto; z-index: 1000; box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      margin-top: 4px; display: flex; flex-direction: column;
+    }
+
+    .suggestions-dropdown.chat-mention-drop { top: auto; bottom: 64px; left: 60px; right: 80px; max-height: 160px; }
+
+    .suggestion-item {
+      padding: 8px 12px; display: flex; align-items: center; gap: 10px;
+      cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border-color); transition: background 0.15s;
+    }
+
+    .suggestion-item:last-child { border-bottom: none; }
+    .suggestion-item:hover { background: var(--sidebar-bg); }
+
+    .selected-users-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+
+    .user-tag {
+      background: var(--active-item); color: var(--active-text); font-size: 12px;
+      font-weight: 600; padding: 4px 8px; border-radius: 12px; display: flex; align-items: center; gap: 6px;
+    }
+
+    .user-tag .remove-tag { cursor: pointer; font-weight: bold; color: var(--text-sub); }
+    .user-tag .remove-tag:hover { color: var(--error-red); }
+
+    .setting-row { display: flex; align-items: center; justify-content: space-between; font-size: 14px; padding: 4px 0; }
+
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+
+    .slider {
+      position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc; transition: .2s; border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background-color: white; transition: .2s; border-radius: 50%;
+    }
+
+    input:checked + .slider { background-color: var(--googol-blue); }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <div id="authContainer" class="modal-overlay">
+    <div class="modal-card">
+      <h2 id="authTitle" class="modal-title">Sign In to Googol Chat</h2>
+      <div id="authError" class="auth-error hidden"></div>
+
+<!-- Removed the 'hidden' class so it always shows -->
+      <div class="auth-field" id="authUsernameField">
+        <label>Username</label>
+        <input type="text" id="authUsername" class="auth-input" placeholder="e.g. CoolUser99">
+      </div>
+      
+      <div class="auth-field">
+        <label>Password</label>
+        <input type="password" id="authPassword" class="auth-input" placeholder="••••••••">
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-primary" style="width: 100%;" onclick="handleAuthSubmit()">Submit</button>
+      </div>
+      
+      <div style="margin-top: 15px; text-align: center; font-size: 13px;">
+        <a href="#" id="authToggleText" onclick="toggleAuthMode()">Need an account? Register</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="appContainer" class="app-container hidden">
+    <div class="sidebar" id="mainSidebar">
+      <div class="sidebar-header">
+        <div class="header-brand">
+          <div class="logo-icon">G</div>
+          <div class="app-name">Googol Chat</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <button id="modPanelBtn" class="action-icon-btn hidden" onclick="openModModal()" title="Moderation Panel" style="width: 28px; height: 28px; font-size: 14px;">🛡️</button>
+          <button class="action-icon-btn" onclick="openSettingsModal()" title="Settings" style="width: 28px; height: 28px; font-size: 14px;">⚙️</button>
+          <button class="collapse-btn" id="collapseToggleBtn" onclick="toggleSidebarCollapse()" title="Toggle Sidebar Alignment">◀</button>
+        </div>
+      </div>
+
+      <div class="sidebar-content">
+        <div class="section-header">
+          <span class="section-title">Spaces</span>
+          <button class="add-btn" onclick="openCreateSpaceModal()">+</button>
+        </div>
+        <div class="nav-list" id="spaceNavList"></div>
+
+        <div class="section-header" style="margin-top: 10px;">
+          <span class="section-title">Direct Messages</span>
+          <button class="add-btn" onclick="openNewDmModal()">+</button>
+        </div>
+        <div class="nav-list" id="dmNavList"></div>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="footer-left" onclick="openUserProfileModal(currentUser)" title="View & Edit Profile">
+          <div id="selfAvatarContainer"></div>
+          <div class="profile-info">
+            <div class="user-profile" id="userProfileName">Player</div>
+            <span class="pfp-hint">View / Edit Profile</span>
+          </div>
+        </div>
+        <div class="logout-link" onclick="logout()">Logout</div>
+      </div>
+    </div>
+
+    <div class="chat-main">
+      <div class="chat-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div id="currentRoomAvatarContainer"></div>
+          <div class="room-title-display" id="roomTitleDisplay">General</div>
+          <button id="roomSettingsBtn" class="action-icon-btn hidden" onclick="openCurrentRoomSettings()" title="Space or DM Settings" style="width: 32px; height: 32px; font-size: 14px;">⚙️</button>
+          <button id="roomMuteBtn" class="action-icon-btn" onclick="toggleCurrentRoomMute()" title="Toggle notifications for this chat" style="width: 32px; height: 32px; font-size: 14px;">🔔</button>
+          <button id="resetChatBtn" class="action-icon-btn" onclick="resetCurrentChat()" title="Reset Chat Messages" style="width: 32px; height: 32px; font-size: 14px; color: var(--error-red);">🧹</button>
+        </div>
+        <div class="status-badge">
+          <div id="statusDot" class="status-dot"></div>
+          <span id="statusText">Connected</span>
+        </div>
+      </div>
+
+      <div id="chatMessages" class="chat-messages"></div>
+
+      <div class="chat-footer">
+        <div id="spamWarning" class="spam-warning hidden">⚠️ Spam filter: You cannot send the exact same message more than 2 times in a row!</div>
+        <div id="typingBanner" class="typing-banner hidden"></div>
+        <div class="reply-banner-hint">Hover over any message and press <b>R</b> to reply</div>
+
+        <div id="replyBanner" class="reply-banner hidden">
+          <span id="replyBannerText">Replying to message...</span>
+          <span class="reply-banner-close" onclick="cancelReply()">✕</span>
+        </div>
+
+        <div id="emojiPopover" class="emoji-popover hidden">
+          <button class="emoji-item" onclick="insertEmoji('👍')">👍</button>
+          <button class="emoji-item" onclick="insertEmoji('😂')">😂</button>
+          <button class="emoji-item" onclick="insertEmoji('🔥')">🔥</button>
+          <button class="emoji-item" onclick="insertEmoji('❤️')">❤️</button>
+          <button class="emoji-item" onclick="insertEmoji('😊')">😊</button>
+          <button class="emoji-item" onclick="insertEmoji('🚀')">🚀</button>
+          <button class="emoji-item" onclick="insertEmoji('🎉')">🎉</button>
+          <button class="emoji-item" onclick="insertEmoji('👀')">👀</button>
+          <button class="emoji-item" onclick="insertEmoji('🙏')">🙏</button>
+          <button class="emoji-item" onclick="insertEmoji('💯')">💯</button>
+        </div>
+
+        <div id="mentionSuggestions" class="suggestions-dropdown chat-mention-drop hidden"></div>
+
+        <div class="input-bar">
+          <button class="action-icon-btn" onclick="toggleEmojiPicker()" title="Choose Emoji">😊</button>
+          <button class="action-icon-btn" onclick="triggerChatImageUpload()" title="Send Image">📷</button>
+          <input type="text" id="messageInput" class="message-input" placeholder="Type a message or @ to ping..." oninput="handleMessageInputChange(this)" onkeypress="handleKey(event)" autocomplete="off">
+          <button class="send-btn" onclick="sendMessage()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="avatarFileInput" accept="image/*" style="display:none;" onchange="handleAvatarFileSelect(event)">
+  <input type="file" id="chatImageInput" accept="image/*" style="display:none;" onchange="handleChatImageSelect(event)">
+  <input type="file" id="spaceIconFileInput" accept="image/*" style="display:none;" onchange="handleSpaceIconSelect(event)">
+  <input type="file" id="dmIconFileInput" accept="image/*" style="display:none;" onchange="handleDmIconSelect(event)">
+    </div>
+    
+
+  <!-- Mailbox Modal -->
+  <div id="mailboxModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">Mailbox: Requests</div>
+      <div id="mailboxList" style="max-height: 200px; overflow-y: auto;">
+        <!-- Pending requests load here -->
+      </div>
+      <div class="modal-btns">
+        <button class="btn-secondary" onclick="document.getElementById('mailboxModal').classList.add('hidden')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INTERACTIVE PROFILE MODAL -->
+  <div id="userProfileModal" class="modal-overlay hidden">
+    <div class="modal-card" style="text-align: center; align-items: center;">
+      <div id="profileModalAvatar"></div>
+      <div class="modal-title" id="profileModalUsername" style="margin-top: 4px; font-size: 18px;">Username</div>
+      <button id="changePfpBtn" class="btn-secondary hidden" style="font-size: 11px; padding: 4px 8px; margin-top: 2px;" onclick="triggerAvatarUpload()">Change Profile Picture</button>
+      
+      <div class="auth-field" style="width: 100%; margin-top: 10px; text-align: left;">
+        <label>Introduction / Bio</label>
+        <textarea id="profileModalBio" class="auth-input" rows="3" placeholder="No introduction provided yet..."></textarea>
+      </div>
+
+      <div class="modal-btns" style="width: 100%; margin-top: 10px; justify-content: space-between;">
+        <button class="btn-secondary" onclick="closeModals()">Close</button>
+        <div id="profileModalActions"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODERATION / BAN MODAL -->
+  <div id="modModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-height: 85vh; overflow-y: auto;">
+      <div class="modal-title">🛡️ Moderation Panel</div>
+      
+      <!-- Ban Account -->
+      <div class="auth-field">
+        <label>Ban Account (Blocks user & purges messages)</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="banUsernameInput" class="auth-input" style="flex:1;" placeholder="Enter username to ban..." oninput="handleModSearchInput(this.value, 'banSuggestions', 'banUsernameInput')" autocomplete="off">
+          <button class="btn-danger" onclick="submitBanUser()">Ban</button>
+        </div>
+        <div id="banSuggestions" class="suggestions-dropdown hidden"></div>
+      </div>
+
+      <!-- Add Unban Account -->
+      <div class="auth-field" style="border-top:1px solid var(--border-color); padding-top:10px;">
+        <label>Unban Account (Restores access)</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="unbanUsernameInput" class="auth-input" style="flex:1;" placeholder="Enter username to unban..." oninput="handleModSearchInput(this.value, 'unbanSuggestions', 'unbanUsernameInput')" autocomplete="off">
+          <button class="btn-primary" onclick="submitUnbanUser()">Unban</button>
+        </div>
+        <div id="unbanSuggestions" class="suggestions-dropdown hidden"></div>
+      </div>
+
+      <!-- Delete Account Entirely -->
+      <div class="auth-field" style="border-top:1px solid var(--border-color); padding-top:10px;">
+        <label>Delete Account Entirely (Erases user completely)</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="deleteUsernameInput" class="auth-input" style="flex:1;" placeholder="Enter username to delete..." oninput="handleModSearchInput(this.value, 'deleteSuggestions', 'deleteUsernameInput')" autocomplete="off">
+          <button class="btn-danger" style="background-color: #b71c1c;" onclick="submitDeleteAccount()">Delete</button>
+        </div>
+        <div id="deleteSuggestions" class="suggestions-dropdown hidden"></div>
+      </div>
+
+      <!-- Add Helper / Moderator -->
+      <div id="jeffySection" class="auth-field hidden" style="border-top:1px solid var(--border-color); padding-top:10px;">
+        <label>Add Helper / Moderator (JettyBonBoi Only)</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="helperUsernameInput" class="auth-input" style="flex:1;" placeholder="Enter helper username...">
+          <button class="btn-primary" onclick="submitAddHelper()">Add Helper</button>
+        </div>
+      </div>
+
+      <div class="modal-btns">
+        <button class="btn-secondary" onclick="closeModals()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="cropModal" class="modal-overlay hidden">
+    <div class="modal-card" style="width: 310px; align-items: center;">
+      <div class="modal-title">Adjust Profile Picture</div>
+      <div style="position: relative; width: 260px; height: 260px;">
+        <canvas id="cropCanvas" width="260" height="260" style="border-radius: 8px; cursor: move; touch-action: none; background: #000;"></canvas>
+      </div>
+      <div style="width: 100%; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-sub);">
+        <span>Zoom:</span>
+        <input type="range" id="cropZoom" min="0.5" max="3" step="0.05" value="1" style="flex:1;">
+      </div>
+      <div class="modal-btns" style="width: 100%;">
+        <button class="btn-secondary" onclick="closeCropModal()">Cancel</button>
+        <button class="btn-primary" onclick="confirmCrop()">Save PFP</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settingsModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">App Settings</div>
+      <div class="setting-row">
+        <span>Dark Mode</span>
+        <label class="switch">
+          <input type="checkbox" id="darkModeToggle" onchange="toggleDarkMode(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="setting-row">
+        <span>Notifications</span>
+        <label class="switch">
+          <input type="checkbox" id="notifToggle" onchange="toggleNotifications(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="modal-btns">
+        <button class="btn-primary" onclick="closeModals()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="spaceSettingsModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">Space Settings (Owner)</div>
+      
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div id="spaceSettingsIconPreview" style="width:48px; height:48px; border-radius:12px; background:var(--googol-blue); color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:20px; cursor:pointer;" onclick="triggerSpaceIconUpload()" title="Change Space Icon">#</div>
+        <div style="flex:1;">
+          <button class="btn-secondary" style="font-size:12px; padding:6px 10px;" onclick="triggerSpaceIconUpload()">Change Space Picture</button>
+        </div>
+      </div>
+
+      <div class="auth-field">
+        <label>Space Name</label>
+        <input type="text" id="spaceSettingsNameInput" class="auth-input">
+      </div>
+
+      <div class="auth-field">
+        <label>Add Members</label>
+        <input type="text" id="spaceSettingsAddMemberInput" class="auth-input" placeholder="Type username..." oninput="handleSpaceSettingsSearch(this.value)" autocomplete="off">
+        <div id="spaceSettingsSuggestions" class="suggestions-dropdown hidden"></div>
+      </div>
+
+      <div class="auth-field">
+        <label>Members List</label>
+        <div id="spaceSettingsMemberList" style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 6px; border: 1px solid var(--border-color); border-radius: 6px;"></div>
+      </div>
+
+      <div class="modal-btns" style="justify-content: space-between;">
+        <button class="btn-danger" onclick="deleteCurrentSpace()">Delete Space</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-secondary" onclick="closeModals()">Cancel</button>
+          <button class="btn-primary" onclick="saveSpaceSettings()">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW RIGHT SIDEBAR -->
+  <div class="members-sidebar" id="rightSidebar" style="display: flex; flex-direction: column; height: 100%;">
+    
+    <!-- 1. Tabs right at the very top -->
+    <div class="sidebar-tabs" style="flex-shrink: 0;">
+      <button onclick="switchRightTab('friends')" id="tab-friends" class="active-tab">Friends</button>
+      <button onclick="switchRightTab('space')" id="tab-space">In Space</button>
+    </div>
+
+    <!-- 2. Header (Optional: you can delete this if you just want the tabs!) -->
+    <div class="members-header" style="flex-shrink: 0;">
+      <span class="members-title">Directory</span>
+      <span id="memberCount" class="member-count-badge">0</span>
+    </div>
+
+    <!-- 3. List area (Stretches to fill the middle) -->
+    <div id="rightSidebarContent" class="members-list" style="flex-grow: 1; overflow-y: auto;">
+      <!-- Animated Loading Skeleton -->
+      <div class="member-card skeleton">
+        <div class="skeleton-avatar"></div>
+        <div class="skeleton-text"></div>
+      </div>
+      <div class="member-card skeleton">
+        <div class="skeleton-avatar"></div>
+        <div class="skeleton-text"></div>
+      </div>
+    </div>
+    
+    <!-- 4. Mailbox button anchored to the very bottom -->
+    <div class="mailbox-container" style="padding: 15px; margin-top: auto; border-top: 1px solid rgba(255,255,255,0.1);">
+      <button class="mailbox-btn" onclick="openMailboxModal()" style="width: 100%;">
+        📬 Open Mailbox (Requests)
+      </button>
+    </div>
+
+  </div>
+
+  <div id="dmSettingsModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">DM Settings</div>
+
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div id="dmSettingsIconPreview" style="width:48px; height:48px; border-radius:50%; background:var(--googol-blue); color:white; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:20px; cursor:pointer;" onclick="triggerDmIconUpload()" title="Change Custom DM Picture">💬</div>
+        <div style="flex:1;">
+          <button class="btn-secondary" style="font-size:12px; padding:6px 10px;" onclick="triggerDmIconUpload()">Custom DM Picture</button>
+        </div>
+      </div>
+
+      <div class="auth-field">
+        <label>Custom DM Nickname</label>
+        <input type="text" id="dmNicknameInput" class="auth-input" placeholder="Set nickname for this person...">
+      </div>
+
+      <div class="modal-btns" style="justify-content: space-between;">
+        <button class="btn-danger" onclick="deleteCurrentDm()">Delete DM</button>
+        <div style="display:flex; gap:6px;">
+          <button class="btn-secondary" onclick="closeModals()">Cancel</button>
+          <button class="btn-primary" onclick="saveDmSettings()">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="spaceModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">Create New Space</div>
+      <div class="auth-field">
+        <label>Space Name</label>
+        <input type="text" id="newSpaceName" class="auth-input" placeholder="e.g. Project Team">
+      </div>
+      <div class="auth-field">
+        <label>Add Members</label>
+        <input type="text" id="spaceMembersInput" class="auth-input" placeholder="Type username..." oninput="handleSpaceSearchInput(this.value)" autocomplete="off">
+        <div id="spaceSuggestions" class="suggestions-dropdown hidden"></div>
+        <div id="spaceSelectedTags" class="selected-users-tags"></div>
+      </div>
+      <div id="spaceModalError" class="auth-error hidden"></div>
+      <div class="modal-btns">
+        <button class="btn-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn-primary" onclick="submitCreateSpace()">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="dmModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-title">New Direct Message</div>
+      <div class="auth-field">
+        <label>Find User</label>
+        <input type="text" id="dmUsernameInput" class="auth-input" placeholder="Type username..." oninput="handleDmSearchInput(this.value)" autocomplete="off">
+        <div id="dmSuggestions" class="suggestions-dropdown hidden"></div>
+      </div>
+      <div id="dmModalError" class="auth-error hidden"></div>
+      <div class="modal-btns">
+        <button class="btn-secondary" onclick="closeModals()">Cancel</button>
+        <button class="btn-primary" onclick="submitStartDm()">Chat</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createClient } = supabase;
+    const supabaseUrl = 'https://cxhclbphzpbbvygqzwmw.supabase.co';
+    const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4aGNsYnBoenBiYnZ5Z3F6d213Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcxMTkwODcsImV4cCI6MjEwMjY5NTA4N30.kldmlCL-rahBAYVCT4E6Rx_rLpR3NNjLgBQlxnY32CA';
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+
+    let currentUser = localStorage.getItem('chat_active_user') || null;
+    let isRegisterMode = false;
+    let isModerator = false;
+    
+    let darkModeEnabled = localStorage.getItem('chat_dark_mode') === 'true';
+    let notificationsEnabled = localStorage.getItem('chat_notifs_enabled') !== 'false';
+    let mutedRooms = JSON.parse(localStorage.getItem('chat_muted_rooms') || '{}');
+    let isSidebarCollapsed = localStorage.getItem('chat_sidebar_collapsed') === 'true';
+
+    let spaceCustomMetadata = JSON.parse(localStorage.getItem('chat_space_metadata') || '{}');
+    let dmCustomMetadata = JSON.parse(localStorage.getItem('chat_dm_metadata') || '{}');
+
+    let pollInterval = null;
+    let roomRealtimeChannel = null;
+    let activeTypingUsers = {};
+    let lastTypingBroadcast = 0;
+    
+    let currentRoom = 'general';
+    let currentRoomDisplay = 'General';
+    let activeReply = null;
+    let hoveredMsgIndex = null;
+    
+    let userSpaces = [];
+    let userDms = [];
+    let cachedGlobalUsers = [];
+    let selectedSpaceMembers = [];
+
+    let roomCache = {};
+    let lastSeenTimestamps = {};
+    let pendingMsgQueue = {};
+    let unreadRooms = {};
+    let userAvatars = {};
+    let userBios = {};
+    let audioCtx = null;
+
+    let mentionMatchStart = -1;
+
+    let rawImg = null;
+    let cropScale = 1;
+    let cropX = 0, cropY = 0;
+    let isDragging = false;
+    let startX = 0, startY = 0;
+
+    if (darkModeEnabled) document.body.classList.add('dark-mode');
+
+    if (isSidebarCollapsed) {
+      document.getElementById('mainSidebar').classList.add('collapsed');
+      const btn = document.getElementById('collapseToggleBtn');
+      if (btn) btn.innerText = '▶';
+    }
+
+    document.addEventListener('mouseover', (e) => {
+      const msgGroup = e.target.closest('.msg-group');
+      if (msgGroup && msgGroup.hasAttribute('data-index')) {
+        hoveredMsgIndex = parseInt(msgGroup.getAttribute('data-index'), 10);
+      }
+    });
+
+    document.addEventListener('mouseout', (e) => {
+      const msgGroup = e.target.closest('.msg-group');
+      if (msgGroup) {
+        hoveredMsgIndex = null;
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      const activeEl = document.activeElement;
+      const isInputActive = activeEl && (
+        activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.isContentEditable
+      );
+
+      if (!isInputActive && (e.key === 'r' || e.key === 'R')) {
+        if (hoveredMsgIndex !== null) {
+          e.preventDefault();
+          startReply(hoveredMsgIndex);
+        }
+      }
+    });
+
+    function initAudioContext() {
+      if (!audioCtx) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (AudioCtx) audioCtx = new AudioCtx();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    document.addEventListener('click', initAudioContext, { once: true });
+    document.addEventListener('keydown', initAudioContext, { once: true });
+
+    if (currentUser) checkBanAndShowApp();
+
+    async function isUserBanned(username) {
+      if (!username) return false;
+      const { data } = await supabaseClient
+        .from('banned_users')
+        .select('username')
+        .ilike('username', username)
+        .maybeSingle();
+      return !!data;
+    }
+
+    async function checkBanAndShowApp() {
+      if (await isUserBanned(currentUser)) {
+        alert("You have been banned from Googol Chat.");
+        logout();
+        return;
+      }
+      await checkModeratorStatus();
+      showApp();
+    }
+
+    async function checkModeratorStatus() {
+      if (!currentUser) return;
+      if (currentUser.toLowerCase() === 'jettybonboi') {
+        isModerator = true;
+      } else {
+        const { data } = await supabaseClient
+          .from('helpers')
+          .select('username')
+          .ilike('username', currentUser)
+          .maybeSingle();
+        isModerator = !!data;
+      }
+
+      const modBtn = document.getElementById('modPanelBtn');
+      if (modBtn) {
+        if (isModerator) modBtn.classList.remove('hidden');
+        else modBtn.classList.add('hidden');
+      }
+    }
+
+    /* ----------------------------------------------------
+       INTERACTIVE USER PROFILE SYSTEM
+    ---------------------------------------------------- */
+    async function openUserProfileModal(targetUsername) {
+      if (!targetUsername) return;
+
+      const profileModal = document.getElementById('userProfileModal');
+      const avatarBox = document.getElementById('profileModalAvatar');
+      const usernameBox = document.getElementById('profileModalUsername');
+      const bioInput = document.getElementById('profileModalBio');
+      const actionsBox = document.getElementById('profileModalActions');
+      const changePfpBtn = document.getElementById('changePfpBtn');
+
+      usernameBox.innerText = targetUsername;
+
+      // Render Avatar
+      const avatarData = userAvatars[targetUsername.toLowerCase()];
+      if (avatarData) {
+        avatarBox.innerHTML = `<img src="${avatarData}" style="width: 70px; height: 70px; border-radius: 50%; object-fit: cover;">`;
+      } else {
+        avatarBox.innerHTML = `<div class="avatar" style="width: 70px; height: 70px; font-size: 28px; background-color:${getAvatarColor(targetUsername)}">${targetUsername.charAt(0).toUpperCase()}</div>`;
+      }
+
+      // Fetch user profile info (bio)
+      const cached = cachedGlobalUsers.find(u => u.username && u.username.toLowerCase() === targetUsername.toLowerCase());
+      let currentBio = cached ? (cached.bio || '') : '';
+
+      try {
+        const { data: dbUser } = await supabaseClient
+          .from('users')
+          .select('bio')
+          .ilike('username', targetUsername)
+          .maybeSingle();
+
+        if (dbUser && dbUser.bio) {
+          currentBio = dbUser.bio;
+          userBios[targetUsername.toLowerCase()] = currentBio;
+        }
+      } catch (e) {}
+
+      bioInput.value = currentBio;
+
+      const isSelf = targetUsername.toLowerCase() === currentUser.toLowerCase();
+
+      if (isSelf) {
+        bioInput.removeAttribute('readonly');
+        bioInput.placeholder = "Write a short introduction about yourself...";
+        changePfpBtn.classList.remove('hidden');
+        actionsBox.innerHTML = `<button class="btn-primary" onclick="saveUserProfileBio()">Save Intro</button>`;
+      } else {
+        bioInput.setAttribute('readonly', 'true');
+        bioInput.placeholder = "No introduction provided...";
+        changePfpBtn.classList.add('hidden');
+        actionsBox.innerHTML = `
+          <button class="btn-secondary" onclick="addFriend('${escapeHtml(targetUsername)}')">➕ Add Friend</button>
+          <button class="btn-primary" onclick="startDmFromProfile('${escapeHtml(targetUsername)}')">💬 Message</button>
+        `;
+      }
+
+      profileModal.classList.remove('hidden');
+    }
+
+    async function addFriend(friendName) {
+      // Insert a pending request into the mailbox table
+      const { error } = await supabaseClient.from('requests').insert([{
+        type: 'friend',
+        sender: currentUser,
+        receiver: friendName,
+        status: 'pending'
+      }]);
+
+      if (error) {
+        alert("Failed to send friend request.");
+      } else {
+        alert(`Friend request sent to ${friendName}!`);
+        closeModals();
+      }
+    }
+
+    async function sendSpaceInvite(targetUsername, spaceId) {
+      // We can use the 'sender' column to store the spaceId so the receiver knows which space it's for
+      const { error } = await supabaseClient.from('requests').insert([{
+        type: 'space',
+        sender: spaceId, 
+        receiver: targetUsername,
+        status: 'pending'
+      }]);
+      
+      if (!error) alert("Space invite sent!");
+    }
+    
+    async function saveUserProfileBio() {
+      const bioInput = document.getElementById('profileModalBio');
+      const newBio = bioInput.value.trim();
+
+      userBios[currentUser.toLowerCase()] = newBio;
+      const cached = cachedGlobalUsers.find(u => u.username && u.username.toLowerCase() === currentUser.toLowerCase());
+      if (cached) cached.bio = newBio;
+
+      try {
+        await supabaseClient
+          .from('users')
+          .update({ bio: newBio })
+          .ilike('username', currentUser);
+      } catch (e) {
+        console.error("Failed to save bio:", e);
+      }
+
+      closeModals();
+      alert("Introduction updated!");
+    }
+
+    async function startDmFromProfile(targetUsername) {
+      closeModals();
+
+      const roomId = getDmRoomId(currentUser, targetUsername);
+      if (!userDms.some(d => d.id === roomId)) {
+        userDms.push({ id: roomId, otherUser: targetUsername });
+        localStorage.setItem('chat_dms_' + currentUser.toLowerCase(), JSON.stringify(userDms));
+      }
+
+      await fetchUserRooms();
+      selectRoom(roomId, targetUsername);
+    }
+
+    /* ----------------------------------------------------
+       RESET CHAT FUNCTIONALITY
+    ---------------------------------------------------- */
+    async function resetCurrentChat() {
+      const isDefaultPermanentSpace = ['updates'].includes(currentRoom);
+
+      if (isDefaultPermanentSpace && !isAllowedToPostInUpdates()) {
+        alert("Only admins can clear updates.");
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to reset and delete ALL messages in "${currentRoomDisplay}"? This cannot be undone.`)) {
+        return;
+      }
+
+      try {
+        const { error } = await supabaseClient
+          .from('messages')
+          .delete()
+          .eq('room', currentRoom);
+
+        if (error) {
+          alert("Failed to reset chat: " + error.message);
+          return;
+        }
+
+        roomCache[currentRoom] = [];
+        if (pendingMsgQueue[currentRoom]) pendingMsgQueue[currentRoom] = [];
+        renderMessages([]);
+      } catch (e) {
+        alert("Error resetting chat: " + e.message);
+      }
+    }
+
+    function openModModal() {
+      if (!isModerator) return;
+      fetchGlobalUsers();
+      document.getElementById('banUsernameInput').value = '';
+      document.getElementById('unbanUsernameInput').value = '';
+      document.getElementById('deleteUsernameInput').value = '';
+      
+      const banSuggestions = document.getElementById('banSuggestions');
+      if (banSuggestions) banSuggestions.classList.add('hidden');
+      const unbanSuggestions = document.getElementById('unbanSuggestions');
+      if (unbanSuggestions) unbanSuggestions.classList.add('hidden');
+      const deleteSuggestions = document.getElementById('deleteSuggestions');
+      if (deleteSuggestions) deleteSuggestions.classList.add('hidden');
+
+      document.getElementById('helperUsernameInput').value = '';
+      
+      const jeffySec = document.getElementById('jeffySection');
+      if (currentUser.toLowerCase() === 'jettybonboi') {
+        jeffySec.classList.remove('hidden');
+      } else {
+        jeffySec.classList.add('hidden');
+      }
+
+      document.getElementById('modModal').classList.remove('hidden');
+    }
+
+    function handleModSearchInput(val, suggestionsId, inputId) {
+      const suggestionsBox = document.getElementById(suggestionsId);
+      const matches = filterUsersMatching(val.trim());
+
+      if (matches.length === 0 || !val.trim()) {
+        suggestionsBox.classList.add('hidden');
+        suggestionsBox.innerHTML = '';
+        return;
+      }
+
+      let html = '';
+      matches.forEach(m => {
+        html += `
+          <div class="suggestion-item" onclick="selectModUser('${escapeHtml(m.username)}', '${suggestionsId}', '${inputId}')">
+            ${generateUserAvatarBadge(m.username)}
+            <span>${escapeHtml(m.username)}</span>
+          </div>
+        `;
+      });
+
+      suggestionsBox.innerHTML = html;
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    function selectModUser(username, suggestionsId, inputId) {
+      document.getElementById(inputId).value = username;
+      document.getElementById(suggestionsId).classList.add('hidden');
+    }
+
+    async function submitBanUser() {
+      const target = document.getElementById('banUsernameInput').value.trim();
+      if (!target) return alert("Please enter a username to ban.");
+      if (target.toLowerCase() === 'jettybonboi') return alert("JettyBonBoi cannot be banned.");
+
+      if (!confirm(`Are you sure you want to ban ${target}? All of their messages will be deleted.`)) return;
+
+      const { error: banErr } = await supabaseClient
+        .from('banned_users')
+        .upsert([{ username: target, banned_by: currentUser }]);
+
+      if (banErr) return alert("Ban failed: " + banErr.message);
+
+      const { error: msgErr } = await supabaseClient
+        .from('messages')
+        .delete()
+        .ilike('user_name', target);
+
+      if (msgErr) console.error("Error clearing banned user messages:", msgErr);
+
+      alert(`User ${target} has been banned and all their messages were deleted.`);
+      closeModals();
+      fetchMessages();
+    }
+
+    async function submitUnbanUser() {
+      const target = document.getElementById('unbanUsernameInput').value.trim();
+      if (!target) return alert("Please enter a username to unban.");
+
+      const { error } = await supabaseClient
+        .from('banned_users')
+        .delete()
+        .ilike('username', target);
+
+      if (error) {
+        alert("Unban failed: " + error.message);
+      } else {
+        alert(`User ${target} has been successfully unbanned.`);
+        closeModals();
+      }
+    }
+
+    // Tab Switching Logic
+    function switchRightTab(tabName) {
+      document.getElementById('tab-friends').classList.remove('active-tab');
+      document.getElementById('tab-space').classList.remove('active-tab');
+      document.getElementById('tab-' + tabName).classList.add('active-tab');
+      
+      if (tabName === 'friends') {
+        renderFriendsList();
+      } else {
+        renderSpaceMembersList();
+      }
+    }
+
+    async function renderFriendsList() {
+      const content = document.getElementById('rightSidebarContent'); //
+      content.innerHTML = `<div style="font-size:12px; color:var(--text-sub); padding:10px;">Loading friends...</div>`; //
+
+      try {
+        // Fetch current user's friends array
+        const { data, error } = await supabaseClient
+          .from('users')
+          .select('friends')
+          .eq('username', currentUser)
+          .single(); //
+
+        if (error) throw error;
+
+        const friends = data?.friends || []; //[cite: 9]
+
+        if (friends.length === 0) {
+          content.innerHTML = `<div style="font-size:12px; color:var(--text-sub); padding:10px;">No friends yet. Add someone!</div>`; //[cite: 9]
+          return;
+        }
+
+        let htmlContent = '';
+        
+        friends.forEach(friend => { //[cite: 9]
+          // Support for both string arrays or object arrays, depending on how your DB saves them
+          const friendName = typeof friend === 'string' ? friend : friend.username;
+          
+          // Use the global avatar cache from your app, or fallback to the initial block[cite: 9]
+          const avatarData = userAvatars[friendName.toLowerCase()];
+          let avatarHtml = avatarData 
+            ? `<img src="${avatarData}" class="avatar small" style="object-fit: cover;">` 
+            : `<div class="avatar small" style="background-color: ${getAvatarColor(friendName)}">${friendName.charAt(0).toUpperCase()}</div>`;
+          
+          // Matches your member-card and user-row CSS classes, and makes it clickable[cite: 9]
+          htmlContent += `
+            <div class="user-row member-card" style="padding: 8px 10px; cursor: pointer;" onclick="openUserProfileModal('${escapeHtml(friendName)}')">
+              ${avatarHtml}
+              <span class="member-name">${escapeHtml(friendName)}</span>
+            </div>
+          `;
+        });
+
+        // Set the built HTML[cite: 9]
+        content.innerHTML = htmlContent; 
+
+      } catch (err) {
+        content.innerHTML = `<div style="font-size:12px; color:var(--error-red); padding:10px;">Error loading friends.</div>`; //[cite: 9]
+        console.error("Failed to load friends:", err);
+      }
+    }
+
+    function getStatusIndicator(status) {
+      if (status === 'active') {
+        return `<div class="status-indicator status-active"></div>`;
+      } else if (status === 'away') {
+        return `<div class="status-indicator status-away"></div>`;
+      } else if (status === 'afk') {
+        // Using a Zzz emoji for sleeping/afk
+        return `<div class="status-indicator status-afk">💤</div>`;
+      }
+      return ''; // Return nothing if they are completely offline or status is unknown
+    }
+
+    async function renderSpaceMembersList() {
+      const content = document.getElementById('rightSidebarContent');
+      const space = userSpaces.find(s => s.id === currentRoom);
+      
+      if (!space) return;
+
+      // Combine the creator and the members array into one unique set
+      const allMembers = new Set([space.created_by, ...(space.members || [])]);
+
+      if (allMembers.size === 0) {
+        content.innerHTML = `<div style="font-size:12px; color:var(--text-sub); padding:10px;">No members in this space.</div>`;
+        return;
+      }
+
+      let html = '';
+      allMembers.forEach(member => {
+        if (!member) return;
+        const isOwner = space.created_by === member;
+        
+        // Ensure we use the cached avatar or fallback color
+        const avatarData = userAvatars[member.toLowerCase()];
+        
+        // FIX: Removed the undefined 'memberData' variable. 
+        // Defaulting to 'offline' until you build a real-time status fetching system.
+        // FIX: Removed the undefined 'memberData' variable. 
+        // Defaulting to 'offline' until you build a real-time status fetching system.
+        // Find the user in our global cache
+        const cachedUser = cachedGlobalUsers.find(u => u.username && u.username.toLowerCase() === member.toLowerCase());
+
+        // Default to 'offline' if we don't have their status, otherwise use their actual status
+        const currentStatus = cachedUser && cachedUser.status ? cachedUser.status : 'offline';
+        const statusHtml = getStatusIndicator(currentStatus);
+        
+        const avatarHtml = `
+          <div class="avatar-container">
+            ${
+              avatarData
+                ? `<img src="${avatarData}" class="avatar small" style="object-fit: cover;">`  
+                : `<div class="avatar small" style="background-color: ${getAvatarColor(member)}">${member.charAt(0).toUpperCase()}</div>`
+            }
+            ${statusHtml}
+          </div>
+        `;
+        html += `
+          <div class="user-row member-card" style="padding: 8px 10px; cursor: pointer;" onclick="openUserProfileModal('${escapeHtml(member)}')">
+            ${avatarHtml}
+            <span class="member-name">${escapeHtml(member)} ${isOwner ? '<span style="font-size:10px; color:var(--googol-blue);">(Owner)</span>' : ''}</span>
+          </div>`;
+      });
+      
+      content.innerHTML = html;
+    }
+
+    async function changeMyStatus(newStatus) {
+      if (!currentUser) return;
+      
+      // Update the database
+      const { error } = await supabaseClient
+        .from('users')
+        .update({ status: newStatus })
+        .eq('username', currentUser);
+        
+      if (error) {
+        console.error("Failed to update status:", error.message);
+      } else {
+        // Refresh the global user cache to see the changes
+        await fetchGlobalUsers();
+        
+        // Re-render the right sidebar to show your new icon
+        const spaceTab = document.getElementById('tab-space');
+        if (spaceTab && spaceTab.classList.contains('active-tab')) {
+          renderSpaceMembersList();
+        }
+      }
+    }
+
+    async function openMailboxModal() {
+      const modal = document.getElementById('mailboxModal');
+      const list = document.getElementById('mailboxList');
+      modal.classList.remove('hidden');
+      list.innerHTML = '<div style="padding:10px;">Loading requests...</div>';
+
+      // Inside openMailboxModal()
+      const { data: requests, error } = await supabaseClient
+        .from('requests')
+        .select('*')
+        .ilike('receiver', currentUser) // Changed from .eq to .ilike
+        .eq('status', 'pending');
+
+      if (!requests || requests.length === 0) {
+        list.innerHTML = '<div style="padding:10px; font-size:14px;">No pending requests!</div>';
+        return;
+      }
+
+      let html = '';
+      requests.forEach(req => {
+        const title = req.type === 'friend' ? `Friend request from ${req.sender}` : `Invite to space ID: ${req.sender}`;
+        html += `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:10px; border-bottom:1px solid var(--border-color);">
+            <span style="font-size:13px;">${title}</span>
+            <div style="display:flex; gap:5px;">
+              <button class="btn-primary" style="padding: 4px 8px; font-size: 12px;" onclick="acceptRequest(${req.id}, '${req.type}', '${req.sender}')">Accept</button>
+            </div>
+          </div>
+        `;
+      });
+      list.innerHTML = html;
+    }
+
+    async function submitDeleteAccount() {
+      const target = document.getElementById('deleteUsernameInput').value.trim();
+      if (!target) return alert("Please enter a username to delete.");
+      if (target.toLowerCase() === 'jettybonboi') return alert("JettyBonBoi cannot be deleted.");
+
+      if (!confirm(`CRITICAL WARNING: Are you sure you want to permanently delete account "${target}"? This will erase their user profile, all sent messages, DM records, and remove them completely as if they never existed.`)) return;
+
+      try {
+        await supabaseClient.from('users').delete().ilike('username', target);
+        await supabaseClient.from('messages').delete().ilike('user_name', target);
+        await supabaseClient.from('banned_users').delete().ilike('username', target);
+        await supabaseClient.from('helpers').delete().ilike('username', target);
+        await supabaseClient.from('hidden_dms').delete().ilike('username', target);
+        await supabaseClient.from('hidden_dms').delete().ilike('target_user', target);
+
+        const { data: spaces } = await supabaseClient.from('spaces').select('*');
+        if (spaces) {
+          for (const s of spaces) {
+            if (Array.isArray(s.members) && s.members.some(m => m.toLowerCase() === target.toLowerCase())) {
+              const updatedMembers = s.members.filter(m => m.toLowerCase() !== target.toLowerCase());
+              await supabaseClient.from('spaces').update({ members: updatedMembers }).eq('id', s.id);
+            }
+          }
+        }
+
+        alert(`Account "${target}" has been permanently deleted from the database.`);
+        closeModals();
+        fetchMessages();
+        fetchGlobalUsers();
+      } catch (err) {
+        alert("Error during account deletion: " + err.message);
+      }
+    }
+
+    async function submitAddHelper() {
+      if (currentUser.toLowerCase() !== 'jettybonboi') return;
+      const target = document.getElementById('helperUsernameInput').value.trim();
+      if (!target) return alert("Please enter a username.");
+
+      const { error } = await supabaseClient
+        .from('helpers')
+        .upsert([{ username: target, added_by: currentUser }]);
+
+      if (error) {
+        alert("Failed to add helper: " + error.message);
+      } else {
+        alert(`${target} is now a helper and can ban users!`);
+        closeModals();
+      }
+    }
+
+    function toggleSidebarCollapse() {
+      const sidebar = document.getElementById('mainSidebar');
+      isSidebarCollapsed = !isSidebarCollapsed;
+      sidebar.classList.toggle('collapsed', isSidebarCollapsed);
+      localStorage.setItem('chat_sidebar_collapsed', isSidebarCollapsed);
+      
+      const btn = document.getElementById('collapseToggleBtn');
+      if (btn) btn.innerText = isSidebarCollapsed ? '▶' : '◀';
+    }
+
+    function playChimeSound() {
+      try {
+        initAudioContext();
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      } catch (e) {}
+    }
+
+    function triggerNotification(sender, messageText, roomTitle, roomId) {
+      if (!notificationsEnabled) return;
+      if (roomId && mutedRooms[roomId]) return;
+
+      playChimeSound();
+      
+      if ("Notification" in window && Notification.permission === "granted") {
+        try {
+          const avatarUrl = userAvatars[sender.toLowerCase()] || "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231a73e8'/><text x='50' y='72' font-size='65' font-weight='bold' text-anchor='middle' fill='white' font-family='sans-serif'>G</text></svg>";
+          const previewText = messageText.startsWith('data:image/') ? '[Image]' : messageText;
+
+          new Notification(`${sender} (${roomTitle})`, {
+            body: previewText,
+            icon: avatarUrl,
+            tag: 'googol-single-latest-msg',
+            renotify: true
+          });
+        } catch(e) {}
+      }
+    }
+
+    function requestNotificationPermission() {
+      if ("Notification" in window && Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    }
+
+    function toggleCurrentRoomMute() {
+      if (mutedRooms[currentRoom]) delete mutedRooms[currentRoom];
+      else mutedRooms[currentRoom] = true;
+      
+      localStorage.setItem('chat_muted_rooms', JSON.stringify(mutedRooms));
+      updateMuteButtonDisplay();
+      renderSidebarNav();
+    }
+
+    function updateMuteButtonDisplay() {
+      const btn = document.getElementById('roomMuteBtn');
+      if (!btn) return;
+      if (mutedRooms[currentRoom]) {
+        btn.innerText = '🔕';
+        btn.title = 'Notifications OFF for this chat (Click to unmute)';
+        btn.style.opacity = '0.5';
+      } else {
+        btn.innerText = '🔔';
+        btn.title = 'Notifications ON for this chat (Click to mute)';
+        btn.style.opacity = '1';
+      }
+    }
+
+    function openSettingsModal() {
+      document.getElementById('darkModeToggle').checked = darkModeEnabled;
+      document.getElementById('notifToggle').checked = notificationsEnabled;
+      document.getElementById('settingsModal').classList.remove('hidden');
+    }
+
+    function toggleDarkMode(enabled) {
+      darkModeEnabled = enabled;
+      localStorage.setItem('chat_dark_mode', enabled);
+      if (enabled) document.body.classList.add('dark-mode');
+      else document.body.classList.remove('dark-mode');
+    }
+
+    function toggleNotifications(enabled) {
+      notificationsEnabled = enabled;
+      localStorage.setItem('chat_notifs_enabled', enabled);
+      if (enabled) requestNotificationPermission();
+    }
+
+    function toggleAuthMode() {
+      isRegisterMode = !isRegisterMode;
+      document.getElementById('authTitle').innerText = isRegisterMode ? "Create Account" : "Sign In to Googol Chat";
+      document.getElementById('authToggleText').innerText = isRegisterMode ? "Already have an account? Sign In" : "Need an account? Register";
+      document.getElementById('authError').classList.add('hidden');
+    }
+
+    async function handleAuthSubmit() {
+      const password = document.getElementById('authPassword').value.trim();
+      const username = document.getElementById('authUsername').value.trim();
+      const errBox = document.getElementById('authError');
+
+      if (!username || !password) {
+        alert("Please fill in both username and password.");
+        return;
+      }
+
+      errBox.classList.add('hidden');
+
+      if (isRegisterMode) {
+        // 1. Check if the username is already taken
+        const { data: existingUser } = await supabaseClient
+          .from('users')
+          .select('username')
+          .eq('username', username)
+          .maybeSingle();
+
+        if (existingUser) {
+          errBox.innerText = "Username already taken. Please choose another one.";
+          errBox.classList.remove('hidden');
+          return;
+        }
+
+        // 2. Register by inserting directly into your custom 'users' table
+        const { error } = await supabaseClient
+          .from('users')
+          .insert([{ username: username, password: password }]);
+
+        if (error) {
+          errBox.innerText = error.message;
+          errBox.classList.remove('hidden');
+        } else {
+          alert("Registration successful! You can now sign in.");
+          toggleAuthMode(); // Switch back to login view
+        }
+
+      } else {
+        // 3. Log in by checking the custom 'users' table
+        const { data: user, error } = await supabaseClient
+          .from('users')
+          .select('*')
+          .eq('username', username)
+          .eq('password', password)
+          .maybeSingle();
+
+        if (error || !user) {
+          errBox.innerText = "Invalid username or password.";
+          errBox.classList.remove('hidden');
+        } else {
+          // Login successful!
+          currentUser = username; 
+          localStorage.setItem('chat_active_user', currentUser);
+          document.getElementById('authContainer').classList.add('hidden');
+          checkBanAndShowApp(); 
+        }
+      }
+    }
+
+    function showApp() {
+      document.getElementById('authContainer').classList.add('hidden');
+      document.getElementById('appContainer').classList.remove('hidden');
+      document.getElementById('userProfileName').innerText = currentUser;
+
+      if (notificationsEnabled) requestNotificationPermission();
+      fetchGlobalUsers();
+      fetchUserRooms();
+      selectRoom('general', 'General');
+      
+      // Add this line to overwrite the skeletons on load!
+      switchRightTab('friends'); 
+      
+      startPolling();
+    }
+
+
+    function logout() {
+      localStorage.removeItem('chat_active_user');
+      currentUser = null;
+      clearInterval(pollInterval);
+      if (roomRealtimeChannel) supabaseClient.removeChannel(roomRealtimeChannel);
+      document.getElementById('appContainer').classList.add('hidden');
+      document.getElementById('authContainer').classList.remove('hidden');
+    }
+
+    function getDmRoomId(userA, userB) {
+      const sorted = [userA.toLowerCase(), userB.toLowerCase()].sort();
+      return `dm_${sorted[0]}_${sorted[1]}`;
+    }
+
+    function triggerAvatarUpload() {
+      document.getElementById('avatarFileInput').click();
+    }
+
+    function handleAvatarFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        rawImg = new Image();
+        rawImg.onload = function() {
+          cropScale = 1; cropX = 0; cropY = 0;
+          document.getElementById('cropZoom').value = 1;
+          document.getElementById('cropModal').classList.remove('hidden');
+          drawCropCanvas();
+        };
+        rawImg.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function drawCropCanvas() {
+      const canvas = document.getElementById('cropCanvas');
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+
+      ctx.clearRect(0, 0, w, h);
+      if (!rawImg) return;
+
+      ctx.save();
+      ctx.translate(w / 2 + cropX, h / 2 + cropY);
+      
+      const baseRatio = Math.max(w / rawImg.width, h / rawImg.height);
+      const drawWidth = rawImg.width * baseRatio * cropScale;
+      const drawHeight = rawImg.height * baseRatio * cropScale;
+
+      ctx.drawImage(rawImg, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      ctx.beginPath();
+      ctx.rect(0, 0, w, h);
+      ctx.arc(w / 2, h / 2, 95, 0, Math.PI * 2, true);
+      ctx.fill();
+
+      ctx.strokeStyle = '#1a73e8';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(w / 2, h / 2, 95, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const cropCanvas = document.getElementById('cropCanvas');
+    function getPointerPos(e) {
+      const rect = cropCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    cropCanvas.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      const p = getPointerPos(e);
+      startX = p.x - cropX; startY = p.y - cropY;
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const p = getPointerPos(e);
+      cropX = p.x - startX; cropY = p.y - startY;
+      drawCropCanvas();
+    });
+
+    window.addEventListener('mouseup', () => { isDragging = false; });
+
+    document.getElementById('cropZoom').addEventListener('input', (e) => {
+      cropScale = parseFloat(e.target.value);
+      drawCropCanvas();
+    });
+
+    async function acceptRequest(requestId, type, sender) {
+      try {
+        // 1. Mark request as accepted
+        await supabaseClient.from('requests').update({ status: 'accepted' }).eq('id', requestId);
+
+        if (type === 'friend') {
+          // 2. Add the sender to YOUR friends list
+          const { data: myData } = await supabaseClient.from('users').select('friends').eq('username', currentUser).single();
+          const myFriends = new Set(myData?.friends || []);
+          myFriends.add(sender);
+          await supabaseClient.from('users').update({ friends: Array.from(myFriends) }).eq('username', currentUser);
+
+          // 3. Add YOU to the sender's friends list
+          const { data: senderData } = await supabaseClient.from('users').select('friends').eq('username', sender).single();
+          const senderFriends = new Set(senderData?.friends || []);
+          senderFriends.add(currentUser);
+          await supabaseClient.from('users').update({ friends: Array.from(senderFriends) }).eq('username', sender);
+
+          alert(`You are now friends with ${sender}!`);
+          if (document.getElementById('tab-friends').classList.contains('active-tab')) {
+            renderFriendsList();
+          }
+        } else if (type === 'space') {
+          // 4. Add yourself to the space members array
+          const { data: spaceData } = await supabaseClient.from('spaces').select('members').eq('id', sender).single();
+          const spaceMembers = new Set(spaceData?.members || []);
+          spaceMembers.add(currentUser);
+          await supabaseClient.from('spaces').update({ members: Array.from(spaceMembers) }).eq('id', sender);
+
+          alert(`You joined the space!`);
+          fetchUserRooms();
+        }
+
+        // Refresh the mailbox view
+        openMailboxModal();
+      } catch (err) {
+        console.error("Error accepting request:", err);
+        alert("Failed to accept request.");
+      }
+    }
+
+    function confirmCrop() {
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = 90; outCanvas.height = 90;
+      const ctx = outCanvas.getContext('2d');
+      const srcCanvas = document.getElementById('cropCanvas');
+
+      ctx.beginPath();
+      ctx.arc(45, 45, 45, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(srcCanvas, 35, 35, 190, 190, 0, 0, 90, 90);
+
+      const croppedBase64 = outCanvas.toDataURL('image/jpeg', 0.8);
+      closeCropModal();
+      saveAvatarGlobally(croppedBase64);
+    }
+
+    function closeCropModal() {
+      document.getElementById('cropModal').classList.add('hidden');
+    }
+
+    userAvatars = JSON.parse(localStorage.getItem('chat_user_avatars') || '{}');
+
+    function saveAvatarToCache(username, base64Data) {
+      if (!username || !base64Data) return;
+      userAvatars[username.toLowerCase()] = base64Data;
+      try {
+        localStorage.setItem('chat_user_avatars', JSON.stringify(userAvatars));
+      } catch (e) {}
+    }
+
+    async function fetchGlobalUsers() {
+      try {
+        // Change this line to include 'status'
+        const { data: users, error } = await supabaseClient.from('users').select('username, avatar, bio, status');
+        if (error) throw error;
+        cachedGlobalUsers = users || [];
+
+        cachedGlobalUsers.forEach(u => {
+          if (u.username) {
+            if (u.avatar) userAvatars[u.username.toLowerCase()] = u.avatar;
+            if (u.bio) userBios[u.username.toLowerCase()] = u.bio;
+          }
+        });
+        localStorage.setItem('chat_user_avatars', JSON.stringify(userAvatars));
+        updateSelfAvatarDisplay();
+        return cachedGlobalUsers;
+      } catch(e) {
+        return [];
+      }
+    }
+
+    async function saveAvatarGlobally(base64Avatar) {
+      saveAvatarToCache(currentUser, base64Avatar);
+      updateSelfAvatarDisplay();
+      renderMessages(roomCache[currentRoom] || []);
+
+      await supabaseClient
+        .from('users')
+        .update({ avatar: base64Avatar })
+        .eq('username', currentUser);
+    }
+
+    function startPolling() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        if (currentUser) {
+          if (await isUserBanned(currentUser)) {
+            alert("Your account has been banned.");
+            logout();
+            return;
+          }
+          fetchMessages();
+          checkBackgroundNotifications();
+        }
+      }, 1200);
+
+      setInterval(cleanAndRenderTyping, 1000);
+    }
+
+    function updateSelfAvatarDisplay() {
+      const box = document.getElementById('selfAvatarContainer');
+      const avatarData = userAvatars[currentUser.toLowerCase()];
+      if (avatarData) {
+        box.innerHTML = `<img src="${avatarData}" class="avatar">`;
+      } else {
+        box.innerHTML = `<div class="avatar" style="background-color:${getAvatarColor(currentUser)}">${currentUser.charAt(0).toUpperCase()}</div>`;
+      }
+    }
+
+    async function loadSpaceMembers() {
+      const membersListEl = document.getElementById('membersList');
+      const countEl = document.getElementById('memberCount');
+
+      // Fetch all registered users from your custom table
+      const { data: members, error } = await supabaseClient
+        .from('users')
+        .select('username');
+
+      if (error) {
+        console.error("Error loading members:", error);
+        membersListEl.innerHTML = `<div style="color: #f23f43; font-size: 0.85rem; padding: 8px;">Failed to load members.</div>`;
+        return;
+      }
+
+      // Update member count
+      if (countEl) countEl.innerText = members.length;
+
+      // Clear loading skeletons
+      membersListEl.innerHTML = '';
+
+      // Render each member card
+      members.forEach(member => {
+        const isYou = member.username === currentUser;
+        const initial = member.username.charAt(0).toUpperCase();
+
+        const card = document.createElement('div');
+        card.className = 'member-card';
+        card.innerHTML = `
+          <div class="member-avatar">${initial}</div>
+          <span class="member-name">${escapeHTML(member.username)}</span>
+          ${isYou ? '<span class="member-you-tag">You</span>' : ''}
+        `;
+
+        membersListEl.appendChild(card);
+      });
+    }
+
+    // Adds a unique background color based on the user's name
+    function getAvatarColor(username) {
+      if (!username) return '#1a73e8';
+      let hash = 0;
+      for (let i = 0; i < username.length; i++) {
+        hash = username.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+      return '#' + '00000'.substring(0, 6 - c.length) + c;
+    }
+    
+    // Replace your current escapeHTML function with this to cover both spellings:
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/[&<>'"]/g, 
+        tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+      );
+    }
+    const escapeHTML = escapeHtml; // Covers the one spot you used all caps!
+
+    async function fetchUserRooms() {
+      try {
+        const { data: spaces } = await supabaseClient.from('spaces').select('*');
+        const rawSpaces = spaces || [];
+
+        const defaultPublicRooms = ['general', 'bugs', 'updates'];
+
+        const filteredSpaces = rawSpaces.filter(s => {
+          if (defaultPublicRooms.includes(s.id)) return true;
+          const isOwner = s.created_by && s.created_by.toLowerCase() === currentUser.toLowerCase();
+          const membersList = Array.isArray(s.members) ? s.members : [];
+          const isMember = membersList.some(m => m && m.toLowerCase() === currentUser.toLowerCase());
+          return isOwner || isMember;
+        });
+
+        userSpaces = filteredSpaces.map(s => {
+          const meta = spaceCustomMetadata[s.id] || {};
+          return {
+            id: s.id,
+            name: meta.name || s.name,
+            created_by: s.created_by,
+            image: s.avatar || meta.image || null,
+            members: Array.isArray(s.members) ? s.members : (meta.members || [])
+          };
+        });
+
+        if (!userSpaces.some(s => s.id === 'general')) {
+          userSpaces.unshift({ id: 'general', name: 'General', created_by: 'system', image: null, members: [] });
+        }
+        if (!userSpaces.some(s => s.id === 'bugs')) {
+          userSpaces.push({ id: 'bugs', name: 'Bugs 🐛', created_by: 'system', image: null, members: [] });
+        }
+        if (!userSpaces.some(s => s.id === 'updates')) {
+          userSpaces.push({ id: 'updates', name: 'Updates 📢', created_by: 'Jeffy1201', image: null, members: [] });
+        }
+
+        let hiddenDmTargets = [];
+        try {
+          const { data: hDms } = await supabaseClient
+            .from('hidden_dms')
+            .select('target_user')
+            .ilike('username', currentUser);
+
+          if (hDms) hiddenDmTargets = hDms.map(h => h.target_user.toLowerCase());
+        } catch(e){}
+
+        const savedDms = JSON.parse(localStorage.getItem('chat_dms_' + currentUser.toLowerCase()) || '[]');
+        userDms = savedDms.filter(d => !hiddenDmTargets.includes(d.otherUser.toLowerCase()));
+
+        const { data: dmMessages } = await supabaseClient
+          .from('messages')
+          .select('room')
+          .like('room', 'dm_%');
+
+        if (dmMessages) {
+          dmMessages.forEach(m => {
+            const parts = m.room.split('_');
+            if (parts.length === 3) {
+              const user1 = parts[1].toLowerCase();
+              const user2 = parts[2].toLowerCase();
+              const myUser = currentUser.toLowerCase();
+
+              if (user1 === myUser || user2 === myUser) {
+                const otherUser = user1 === myUser ? parts[2] : parts[1];
+                if (!hiddenDmTargets.includes(otherUser.toLowerCase())) {
+                  if (!userDms.some(d => d.id === m.room)) {
+                    userDms.push({ id: m.room, otherUser: otherUser });
+                  }
+                }
+              }
+            }
+          });
+        }
+
+        localStorage.setItem('chat_dms_' + currentUser.toLowerCase(), JSON.stringify(userDms));
+        renderSidebarNav();
+      } catch (e) {}
+    }
+
+    function renderSidebarNav() {
+      const spaceBox = document.getElementById('spaceNavList');
+      let spaceHtml = '';
+      userSpaces.forEach(s => {
+        const isUnread = unreadRooms[s.id] && s.id !== currentRoom;
+        const isMuted = mutedRooms[s.id];
+        const iconHtml = s.image 
+          ? `<img src="${s.image}" style="width:22px; height:22px; border-radius:6px; object-fit:cover;">` 
+          : '<span class="nav-icon">#</span>';
+
+        spaceHtml += `
+          <div class="nav-item ${s.id === currentRoom ? 'active' : ''}" id="nav-room-${s.id}" onclick="selectRoom('${s.id}', '${escapeHtml(s.name)}')" title="${escapeHtml(s.name)}">
+            <div class="nav-item-left">
+              ${iconHtml}
+              <span>${escapeHtml(s.name)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              ${isMuted ? '<span style="font-size:11px; opacity:0.6;">🔕</span>' : ''}
+              ${isUnread ? '<div class="unread-dot"></div>' : ''}
+            </div>
+          </div>
+        `;
+      });
+      spaceBox.innerHTML = spaceHtml;
+
+      const dmBox = document.getElementById('dmNavList');
+      let dmHtml = '';
+      userDms.forEach(d => {
+        const isUnread = unreadRooms[d.id] && d.id !== currentRoom;
+        const isMuted = mutedRooms[d.id];
+        const meta = dmCustomMetadata[d.id] || {};
+        const displayName = meta.nickname || d.otherUser;
+
+        const iconHtml = meta.image 
+          ? `<img src="${meta.image}" style="width:22px; height:22px; border-radius:50%; object-fit:cover;">` 
+          : generateUserAvatarBadge(d.otherUser);
+
+        dmHtml += `
+          <div class="nav-item ${d.id === currentRoom ? 'active' : ''}" id="nav-room-${d.id}" onclick="selectRoom('${d.id}', '${escapeHtml(displayName)}')" title="${escapeHtml(displayName)}">
+            <div class="nav-item-left">
+              ${iconHtml}
+              <span>${escapeHtml(displayName)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:4px;">
+              ${isMuted ? '<span style="font-size:11px; opacity:0.6;">🔕</span>' : ''}
+              ${isUnread ? '<div class="unread-dot"></div>' : ''}
+            </div>
+          </div>
+        `;
+      });
+      dmBox.innerHTML = dmHtml || '<div style="font-size:12px; color:var(--text-sub); padding: 4px 12px;">No active DMs</div>';
+    }
+
+    function subscribeToRealtimeChannel(roomId) {
+      if (roomRealtimeChannel) {
+        supabaseClient.removeChannel(roomRealtimeChannel);
+      }
+
+      roomRealtimeChannel = supabaseClient.channel(`realtime_${roomId}`, {
+        config: { broadcast: { self: false } }
+      });
+
+      roomRealtimeChannel
+        .on('broadcast', { event: 'typing' }, (payload) => {
+          if (payload.payload && payload.payload.user && payload.payload.user !== currentUser) {
+            handleRemoteTyping(payload.payload.user);
+          }
+        })
+        .subscribe();
+    }
+
+    function handleRemoteTyping(username) {
+      activeTypingUsers[username] = Date.now();
+      cleanAndRenderTyping();
+    }
+
+    function cleanAndRenderTyping() {
+      const now = Date.now();
+      const active = Object.keys(activeTypingUsers).filter(u => now - activeTypingUsers[u] < 2800);
+
+      const banner = document.getElementById('typingBanner');
+      if (!banner) return;
+
+      if (active.length === 0) {
+        banner.classList.add('hidden');
+        banner.innerText = '';
+      } else {
+        banner.classList.remove('hidden');
+        if (active.length === 1) banner.innerText = `✍️ ${active[0]} is typing...`;
+        else if (active.length === 2) banner.innerText = `✍️ ${active[0]} and ${active[1]} are typing...`;
+        else banner.innerText = `✍️ ${active[0]} and ${active.length - 1} others are typing...`;
+      }
+    }
+
+    function broadcastTyping() {
+      const now = Date.now();
+      if (now - lastTypingBroadcast > 1500 && roomRealtimeChannel) {
+        lastTypingBroadcast = now;
+        roomRealtimeChannel.send({
+          type: 'broadcast',
+          event: 'typing',
+          payload: { user: currentUser }
+        });
+      }
+    }
+
+    function isAllowedToPostInUpdates() {
+      if (!currentUser) return false;
+      const lower = currentUser.toLowerCase();
+      return lower === 'jeffy1201' || lower === 'announcementbot';
+    }
+
+    function updateRoomPermissions() {
+      const input = document.getElementById('messageInput');
+      const sendBtn = document.querySelector('.send-btn');
+      const actionBtns = document.querySelectorAll('.chat-footer .action-icon-btn');
+
+      const isUpdateSpace = (currentRoom === 'updates' || currentRoom === 'space_update');
+      const allowed = isAllowedToPostInUpdates();
+
+      if (isUpdateSpace && !allowed) {
+        input.disabled = true;
+        input.placeholder = "Only Jeffy1201 and AnnouncementBot can post in this space.";
+        sendBtn.disabled = true;
+        sendBtn.style.opacity = '0.5';
+        sendBtn.style.cursor = 'not-allowed';
+        actionBtns.forEach(btn => {
+          btn.style.pointerEvents = 'none';
+          btn.style.opacity = '0.5';
+        });
+      } else {
+        input.disabled = false;
+        input.placeholder = "Type a message or @ to ping...";
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
+        sendBtn.style.cursor = 'pointer';
+        actionBtns.forEach(btn => {
+          btn.style.pointerEvents = 'auto';
+          btn.style.opacity = '1';
+        });
+      }
+    }
+
+    function selectRoom(roomId, titleDisplay) {
+      currentRoom = roomId;
+      currentRoomDisplay = titleDisplay;
+      activeTypingUsers = {};
+      cleanAndRenderTyping();
+
+      unreadRooms[roomId] = false;
+      document.getElementById('roomTitleDisplay').innerText = titleDisplay;
+      
+      const settingsBtn = document.getElementById('roomSettingsBtn');
+      const spaceObj = userSpaces.find(s => s.id === roomId);
+      const isDefaultSpace = ['general', 'bugs', 'updates', 'space_update'].includes(roomId);
+      
+      if (spaceObj && spaceObj.created_by && spaceObj.created_by.toLowerCase() === currentUser.toLowerCase() && !isDefaultSpace) {
+        settingsBtn.classList.remove('hidden');
+        settingsBtn.title = "Space Settings (Owner)";
+      } else if (roomId.startsWith('dm_')) {
+        settingsBtn.classList.remove('hidden');
+        settingsBtn.title = "DM Settings";
+      } else {
+        settingsBtn.classList.add('hidden');
+      }
+
+      updateMuteButtonDisplay();
+      updateRoomPermissions();
+      renderSidebarNav();
+      subscribeToRealtimeChannel(roomId);
+
+      renderMessages(roomCache[currentRoom] || []);
+      fetchMessages();
+      const spaceTab = document.getElementById('tab-space');
+      if (spaceTab && spaceTab.classList.contains('active-tab')) {
+        renderSpaceMembersList();
+    }
+    }
+
+    function openCurrentRoomSettings() {
+      if (currentRoom.startsWith('space_')) openSpaceSettingsModal();
+      else if (currentRoom.startsWith('dm_')) openDmSettingsModal();
+    }
+
+    function openSpaceSettingsModal() {
+      const space = userSpaces.find(s => s.id === currentRoom);
+      if (!space) return;
+
+      document.getElementById('spaceSettingsNameInput').value = space.name;
+      document.getElementById('spaceSettingsAddMemberInput').value = '';
+      document.getElementById('spaceSettingsSuggestions').classList.add('hidden');
+
+      const iconPreview = document.getElementById('spaceSettingsIconPreview');
+      if (space.image) {
+        iconPreview.innerHTML = `<img src="${space.image}" style="width:100%; height:100%; border-radius:12px; object-fit:cover;">`;
+      } else {
+        iconPreview.innerText = '#';
+      }
+
+      renderSpaceSettingsMemberList();
+      document.getElementById('spaceSettingsModal').classList.remove('hidden');
+    }
+
+    function triggerSpaceIconUpload() {
+      document.getElementById('spaceIconFileInput').click();
+    }
+
+    function handleSpaceIconSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          canvas.width = 100; canvas.height = 100;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 100, 100);
+          
+          const iconBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          if (!spaceCustomMetadata[currentRoom]) spaceCustomMetadata[currentRoom] = {};
+          spaceCustomMetadata[currentRoom].image = iconBase64;
+          
+          document.getElementById('spaceSettingsIconPreview').innerHTML = `<img src="${iconBase64}" style="width:100%; height:100%; border-radius:12px; object-fit:cover;">`;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function renderSpaceSettingsMemberList() {
+      const space = userSpaces.find(s => s.id === currentRoom);
+      const memberListBox = document.getElementById('spaceSettingsMemberList');
+      let members = space ? (space.members || []) : [];
+
+      let html = '';
+      if (space && space.created_by) {
+        html += `
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:13px; padding:6px 10px; background:var(--sidebar-bg); border-radius:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${generateUserAvatarBadge(space.created_by)}
+              <span><b>${escapeHtml(space.created_by)}</b> <span style="font-size:11px; color:var(--googol-blue);">(Owner)</span></span>
+            </div>
+          </div>
+        `;
+      }
+
+      members.forEach(m => {
+        if (space && m.toLowerCase() === space.created_by.toLowerCase()) return;
+        html += `
+          <div style="display:flex; align-items:center; justify-content:space-between; font-size:13px; padding:6px 10px; background:var(--sidebar-bg); border-radius:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${generateUserAvatarBadge(m)}
+              <span>${escapeHtml(m)}</span>
+            </div>
+            <span style="color:var(--error-red); cursor:pointer; font-weight:bold; font-size:12px;" onclick="removeSpaceMemberSettings('${escapeHtml(m)}')">Remove</span>
+          </div>
+        `;
+      });
+
+      memberListBox.innerHTML = html || '<div style="font-size:12px; color:var(--text-sub);">No extra members added yet.</div>';
+    }
+
+    function handleSpaceSettingsSearch(val) {
+      const suggestionsBox = document.getElementById('spaceSettingsSuggestions');
+      const matches = filterUsersMatching(val.trim());
+
+      if (matches.length === 0 || !val.trim()) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      let html = '';
+      matches.forEach(m => {
+        html += `
+          <div class="suggestion-item" onclick="addSpaceMemberSettings('${escapeHtml(m.username)}')">
+            ${generateUserAvatarBadge(m.username)}
+            <span>${escapeHtml(m.username)}</span>
+          </div>
+        `;
+      });
+
+      suggestionsBox.innerHTML = html;
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    function addSpaceMemberSettings(username) {
+      const space = userSpaces.find(s => s.id === currentRoom);
+      if (!space) return;
+      if (!space.members) space.members = [];
+      if (!space.members.includes(username)) {
+        space.members.push(username);
+      }
+      document.getElementById('spaceSettingsAddMemberInput').value = '';
+      document.getElementById('spaceSettingsSuggestions').classList.add('hidden');
+      renderSpaceSettingsMemberList();
+    }
+
+    function removeSpaceMemberSettings(username) {
+      const space = userSpaces.find(s => s.id === currentRoom);
+      if (!space || !space.members) return;
+      space.members = space.members.filter(m => m !== username);
+      renderSpaceSettingsMemberList();
+    }
+
+    async function saveSpaceSettings() {
+      const space = userSpaces.find(s => s.id === currentRoom);
+      if (!space) return;
+
+      const newName = document.getElementById('spaceSettingsNameInput').value.trim();
+      if (newName) space.name = newName;
+
+      const iconBase64 = spaceCustomMetadata[currentRoom]?.image || space.image || null;
+
+      const { error } = await supabaseClient
+        .from('spaces')
+        .update({
+          name: space.name,
+          members: space.members || [],
+          avatar: iconBase64
+        })
+        .eq('id', currentRoom);
+
+      if (error) {
+        console.error("Error saving space settings to Supabase:", error.message);
+      }
+
+      if (!spaceCustomMetadata[currentRoom]) spaceCustomMetadata[currentRoom] = {};
+      spaceCustomMetadata[currentRoom].name = space.name;
+      spaceCustomMetadata[currentRoom].members = space.members || [];
+      spaceCustomMetadata[currentRoom].image = iconBase64;
+
+      localStorage.setItem('chat_space_metadata', JSON.stringify(spaceCustomMetadata));
+      
+      closeModals();
+      await fetchUserRooms();
+      selectRoom(currentRoom, space.name);
+    }
+
+    async function deleteCurrentSpace() {
+      if (['general', 'bugs', 'updates', 'space_update'].includes(currentRoom)) {
+        alert("Default permanent spaces cannot be deleted.");
+        return;
+      }
+      if (!confirm("Are you sure you want to delete this space?")) return;
+      
+      await supabaseClient.from('spaces').delete().eq('id', currentRoom);
+      userSpaces = userSpaces.filter(s => s.id !== currentRoom);
+      delete spaceCustomMetadata[currentRoom];
+      localStorage.setItem('chat_space_metadata', JSON.stringify(spaceCustomMetadata));
+      
+      closeModals();
+      selectRoom('general', 'General');
+      fetchUserRooms();
+    }
+
+    function openDmSettingsModal() {
+      const meta = dmCustomMetadata[currentRoom] || {};
+      document.getElementById('dmNicknameInput').value = meta.nickname || '';
+
+      const iconPreview = document.getElementById('dmSettingsIconPreview');
+      if (meta.image) {
+        iconPreview.innerHTML = `<img src="${meta.image}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+      } else {
+        iconPreview.innerText = '💬';
+      }
+
+      document.getElementById('dmSettingsModal').classList.remove('hidden');
+    }
+
+    function triggerDmIconUpload() {
+      document.getElementById('dmIconFileInput').click();
+    }
+
+    function handleDmIconSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          canvas.width = 100; canvas.height = 100;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, 100, 100);
+          
+          const iconBase64 = canvas.toDataURL('image/jpeg', 0.8);
+          if (!dmCustomMetadata[currentRoom]) dmCustomMetadata[currentRoom] = {};
+          dmCustomMetadata[currentRoom].image = iconBase64;
+          
+          document.getElementById('dmSettingsIconPreview').innerHTML = `<img src="${iconBase64}" style="width:100%; height:100%; border-radius:50%; object-fit:cover;">`;
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    function saveDmSettings() {
+      const nickname = document.getElementById('dmNicknameInput').value.trim();
+      if (!dmCustomMetadata[currentRoom]) dmCustomMetadata[currentRoom] = {};
+      
+      dmCustomMetadata[currentRoom].nickname = nickname;
+      localStorage.setItem('chat_dm_metadata', JSON.stringify(dmCustomMetadata));
+
+      closeModals();
+      const dm = userDms.find(d => d.id === currentRoom);
+      const title = nickname || (dm ? dm.otherUser : currentRoomDisplay);
+      selectRoom(currentRoom, title);
+    }
+
+    async function deleteCurrentDm() {
+      if (!confirm("Are you sure you want to delete this DM conversation from your list?")) return;
+
+      const dm = userDms.find(d => d.id === currentRoom);
+      if (dm) {
+        try {
+          const { error } = await supabaseClient
+            .from('hidden_dms')
+            .upsert([
+              { 
+                username: currentUser.toLowerCase(), 
+                target_user: dm.otherUser.toLowerCase() 
+              }
+            ], { onConflict: 'username, target_user' });
+
+          if (error) console.error("Error updating hidden_dms table:", error.message);
+        } catch(e) {
+          console.error("Failed to hide DM:", e);
+        }
+
+        userDms = userDms.filter(d => d.id !== currentRoom);
+        localStorage.setItem('chat_dms_' + currentUser.toLowerCase(), JSON.stringify(userDms));
+      }
+
+      closeModals();
+      selectRoom('general', 'General');
+      await fetchUserRooms();
+    }
+
+    async function deleteMessage(msgId) {
+      if (!msgId) return;
+      if (!confirm("Delete this message?")) return;
+
+      const roomMsgs = roomCache[currentRoom] || [];
+      const targetMsg = roomMsgs.find(m => String(m.id) === String(msgId));
+      if (targetMsg) {
+        targetMsg.text = 'deleted by user';
+        targetMsg.is_deleted = true;
+        renderMessages(roomMsgs);
+      }
+
+      try {
+        const { error } = await supabaseClient
+          .from('messages')
+          .update({ text: 'deleted by user', is_deleted: true })
+          .eq('id', msgId);
+
+        if (error) console.error("Supabase message delete error:", error.message);
+        await fetchMessages();
+      } catch (e) {
+        console.error("Error deleting message:", e);
+      }
+    }
+
+    async function fetchMessages() {
+      const targetRoom = currentRoom;
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      
+      statusDot.classList.add('syncing');
+      statusText.innerText = 'Connecting...';
+
+      try {
+        const { data: serverRaw, error } = await supabaseClient
+          .from('messages')
+          .select('*')
+          .eq('room', targetRoom)
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (targetRoom !== currentRoom) return;
+
+        statusDot.className = 'status-dot';
+        statusDot.style.backgroundColor = '';
+        statusText.innerText = 'Connected';
+
+        const serverMessages = (serverRaw || []).map(m => {
+          let parsedText = m.text;
+          let replyToObj = null;
+
+          if (m.text && m.text.startsWith('{') && m.text.includes('"replyTo"')) {
+            try {
+              const json = JSON.parse(m.text);
+              parsedText = json.text;
+              replyToObj = json.replyTo;
+            } catch(e){}
+          }
+
+          const isDeleted = m.is_deleted || parsedText === 'deleted by user';
+
+          return {
+            id: m.id,
+            user: m.user_name || m.user,
+            text: isDeleted ? 'deleted by user' : parsedText,
+            is_deleted: isDeleted,
+            replyTo: replyToObj,
+            time: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            rawTime: new Date(m.created_at).getTime()
+          };
+        });
+
+        if (serverMessages.length > 0) {
+          const newestMsg = serverMessages[serverMessages.length - 1];
+          const msgTimestamp = newestMsg.rawTime || 0;
+          const lastTimestamp = lastSeenTimestamps[targetRoom] || 0;
+
+          if (lastTimestamp > 0 && msgTimestamp > lastTimestamp) {
+            if (newestMsg.user.toLowerCase() !== currentUser.toLowerCase()) {
+              triggerNotification(newestMsg.user, newestMsg.text, currentRoomDisplay, targetRoom);
+            }
+          }
+          lastSeenTimestamps[targetRoom] = msgTimestamp;
+        }
+
+        const pending = pendingMsgQueue[targetRoom] || [];
+        const combined = [...serverMessages];
+
+        pending.forEach(pMsg => {
+          if (!serverMessages.some(sMsg => sMsg.user === pMsg.user && sMsg.text === pMsg.text)) {
+            combined.push(pMsg);
+          }
+        });
+
+        roomCache[targetRoom] = combined;
+        renderMessages(roomCache[targetRoom]);
+      } catch (err) {
+        if (targetRoom === currentRoom) {
+          statusDot.className = 'status-dot';
+          statusText.innerText = 'Disconnected';
+          if (!document.hidden) statusDot.style.backgroundColor = '#ea4335';
+        }
+      }
+    }
+
+    async function checkBackgroundNotifications() {
+      const allRooms = [
+        ...userSpaces.map(s => ({ id: s.id, name: s.name })),
+        ...userDms.map(d => ({ id: d.id, name: d.otherUser }))
+      ];
+
+      for (let r of allRooms) {
+        if (r.id === currentRoom) continue;
+
+        try {
+          const { data: msgs } = await supabaseClient
+            .from('messages')
+            .select('*')
+            .eq('room', r.id)
+            .order('created_at', { ascending: true });
+
+          if (msgs && msgs.length > 0) {
+            const newest = msgs[msgs.length - 1];
+            const msgTime = new Date(newest.created_at).getTime();
+            const lastTime = lastSeenTimestamps[r.id] || 0;
+            const sender = newest.user_name || newest.user;
+
+            if (lastTime > 0 && msgTime > lastTime) {
+              if (sender.toLowerCase() !== currentUser.toLowerCase()) {
+                unreadRooms[r.id] = true;
+                renderSidebarNav();
+                triggerNotification(sender, newest.text, r.name, r.id);
+              }
+            }
+            lastSeenTimestamps[r.id] = msgTime;
+          }
+        } catch(e) {}
+      }
+    }
+
+    function formatMessageContent(text) {
+      if (text.startsWith('data:image/')) {
+        return `<img src="${text}" alt="attachment">`;
+      }
+
+      let escaped = escapeHtml(text);
+      return escaped.replace(/@([a-zA-Z0-9_]+)/g, (match, username) => {
+        const isMe = username.toLowerCase() === currentUser.toLowerCase();
+        return `<span class="mention-tag ${isMe ? 'mention-me' : ''}" onclick="openUserProfileModal('${escapeHtml(username)}')">@${username}</span>`;
+      });
+    }
+
+    function renderMessages(messages) {
+      const box = document.getElementById('chatMessages');
+
+      if (!messages || messages.length === 0) {
+        box.innerHTML = '<div style="text-align:center; color:var(--text-sub); font-size:13px; margin-top:20px;">No messages here yet. Say hi!</div>';
+        return;
+      }
+
+      let html = '';
+      messages.forEach((m, index) => {
+        const isSelf = m.user.toLowerCase() === currentUser.toLowerCase();
+        const prevMsg = index > 0 ? messages[index - 1] : null;
+
+        const isConsecutive = prevMsg && 
+          prevMsg.user.toLowerCase() === m.user.toLowerCase() && 
+          !m.replyTo;
+
+        const avatarData = userAvatars[m.user.toLowerCase()];
+        
+        let avatarHtml = avatarData 
+          ? `<img src="${avatarData}" class="avatar" onclick="openUserProfileModal('${escapeHtml(m.user)}')">` 
+          : `<div class="avatar" onclick="openUserProfileModal('${escapeHtml(m.user)}')" style="background-color: ${getAvatarColor(m.user)}">${m.user.charAt(0).toUpperCase()}</div>`;
+
+        const isDeleted = m.is_deleted || m.text === 'deleted by user';
+        let bubbleContent = isDeleted 
+          ? `<span class="msg-deleted-text">deleted by user</span>` 
+          : formatMessageContent(m.text);
+
+        let deleteBtnHtml = '';
+        if (isSelf && !isDeleted && m.id) {
+          deleteBtnHtml = `<button class="msg-delete-btn" onclick="deleteMessage('${m.id}')" title="Delete message">🗑️</button>`;
+        }
+
+        let replyQuoteHtml = '';
+        if (m.replyTo && !isDeleted) {
+          const shortQuote = m.replyTo.text.length > 50 ? m.replyTo.text.slice(0, 50) + '...' : m.replyTo.text;
+          replyQuoteHtml = `
+            <div class="quoted-reply">
+              <b>${escapeHtml(m.replyTo.user)}</b>: ${escapeHtml(shortQuote)}
+            </div>
+          `;
+        }
+
+        if (isConsecutive) {
+          html += `
+            <div class="msg-group ${isSelf ? 'self' : 'other'} ${m.pending ? 'pending' : ''} consecutive" data-index="${index}">
+              <div style="width: 34px; flex-shrink: 0;"></div>
+              <div class="msg-content">
+                <div class="msg-bubble">
+                  ${replyQuoteHtml}
+                  ${bubbleContent}
+                  ${deleteBtnHtml}
+                </div>
+              </div>
+            </div>
+          `;
+        } else {
+          html += `
+            <div class="msg-group ${isSelf ? 'self' : 'other'} ${m.pending ? 'pending' : ''}" data-index="${index}">
+              <div>
+                ${avatarHtml}
+              </div>
+              <div class="msg-content">
+                <div class="msg-header">
+                  <span class="user-name" onclick="openUserProfileModal('${escapeHtml(m.user)}')">${escapeHtml(m.user)}</span>
+                  <span>${m.time}</span>
+                </div>
+                <div class="msg-bubble">
+                  ${replyQuoteHtml}
+                  ${bubbleContent}
+                  ${deleteBtnHtml}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+      });
+
+      const isAtBottom = box.scrollHeight - box.clientHeight <= box.scrollTop + 60;
+      box.innerHTML = html;
+      if (isAtBottom) box.scrollTop = box.scrollHeight;
+    }
+
+    function startReply(msgIndex) {
+      if ((currentRoom === 'updates' || currentRoom === 'space_update') && !isAllowedToPostInUpdates()) return;
+
+      const msg = (roomCache[currentRoom] || [])[msgIndex];
+      if (!msg || msg.is_deleted) return;
+
+      activeReply = {
+        user: msg.user,
+        text: msg.text
+      };
+
+      const banner = document.getElementById('replyBanner');
+      const bannerText = document.getElementById('replyBannerText');
+      const snippet = msg.text.startsWith('data:image/') ? '[Image]' : (msg.text.length > 40 ? msg.text.slice(0, 40) + '...' : msg.text);
+      
+      bannerText.innerText = `Replying to @${msg.user}: "${snippet}"`;
+      banner.classList.remove('hidden');
+      document.getElementById('messageInput').focus();
+    }
+
+    function cancelReply() {
+      activeReply = null;
+      document.getElementById('replyBanner').classList.add('hidden');
+    }
+
+    function isSpamMessage(payloadText) {
+      const msgs = roomCache[currentRoom] || [];
+      let consecutiveCount = 0;
+
+      for (let i = msgs.length - 1; i >= 0; i--) {
+        const m = msgs[i];
+        if (m.user.toLowerCase() === currentUser.toLowerCase()) {
+          if (m.text.trim() === payloadText.trim()) consecutiveCount++;
+          else break;
+        } else break;
+      }
+
+      return consecutiveCount >= 2;
+    }
+
+    function showSpamWarning() {
+      const banner = document.getElementById('spamWarning');
+      banner.classList.remove('hidden');
+      setTimeout(() => { banner.classList.add('hidden'); }, 3500);
+    }
+
+    async function dispatchMessagePayload(payloadText) {
+      if ((currentRoom === 'updates' || currentRoom === 'space_update') && !isAllowedToPostInUpdates()) {
+        alert("Only Jeffy1201 and AnnouncementBot are permitted to send messages in the Updates space.");
+        return;
+      }
+
+      if (isSpamMessage(payloadText)) {
+        showSpamWarning();
+        return;
+      }
+
+      initAudioContext();
+
+      const now = new Date();
+      const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
+                      now.getMinutes().toString().padStart(2, '0') + ':' + 
+                      now.getSeconds().toString().padStart(2, '0');
+
+      const currentReplyObj = activeReply ? { ...activeReply } : null;
+      cancelReply();
+
+      const optimisticMsg = {
+        user: currentUser,
+        text: payloadText,
+        replyTo: currentReplyObj,
+        time: timeStr,
+        pending: true
+      };
+
+      if (!pendingMsgQueue[currentRoom]) pendingMsgQueue[currentRoom] = [];
+      pendingMsgQueue[currentRoom].push(optimisticMsg);
+
+      if (!roomCache[currentRoom]) roomCache[currentRoom] = [];
+      roomCache[currentRoom].push(optimisticMsg);
+      renderMessages(roomCache[currentRoom]);
+
+      const finalServerText = currentReplyObj 
+        ? JSON.stringify({ text: payloadText, replyTo: currentReplyObj })
+        : payloadText;
+
+      try {
+        const { error } = await supabaseClient
+          .from('messages')
+          .insert([
+            { room: currentRoom, user_name: currentUser, text: finalServerText }
+          ]);
+
+        if (error) console.error("Server send error:", error.message);
+
+        optimisticMsg.pending = false;
+        pendingMsgQueue[currentRoom] = pendingMsgQueue[currentRoom].filter(m => m !== optimisticMsg);
+        fetchMessages();
+      } catch (err) {
+        console.error("Send Error:", err);
+      }
+    }
+
+    function sendMessage() {
+      const msgInput = document.getElementById('messageInput');
+      const text = msgInput.value.trim();
+      if (!text) return;
+
+      msgInput.value = '';
+      hideEmojiPicker();
+      document.getElementById('mentionSuggestions').classList.add('hidden');
+      dispatchMessagePayload(text);
+    }
+
+    function handleMessageInputChange(inputEl) {
+      broadcastTyping();
+      handleMentionInput(inputEl);
+    }
+
+    function toggleEmojiPicker() {
+      if ((currentRoom === 'updates' || currentRoom === 'space_update') && !isAllowedToPostInUpdates()) return;
+      document.getElementById('emojiPopover').classList.toggle('hidden');
+    }
+
+    function hideEmojiPicker() {
+      document.getElementById('emojiPopover').classList.add('hidden');
+    }
+
+    function insertEmoji(emoji) {
+      const msgInput = document.getElementById('messageInput');
+      msgInput.value += emoji;
+      msgInput.focus();
+      hideEmojiPicker();
+    }
+
+    function triggerChatImageUpload() {
+      if ((currentRoom === 'updates' || currentRoom === 'space_update') && !isAllowedToPostInUpdates()) return;
+      document.getElementById('chatImageInput').click();
+    }
+
+    function handleChatImageSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const img = new Image();
+        img.onload = function() {
+          const canvas = document.createElement('canvas');
+          let width = img.width, height = img.height;
+          
+          const maxDim = 400;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
+          }
+
+          canvas.width = width; canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.55);
+          dispatchMessagePayload(compressedBase64);
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+      event.target.value = '';
+    }
+
+    // Filters the global user list for the search dropdowns
+    function filterUsersMatching(val) {
+      if (!val) return [];
+      const lowerVal = val.toLowerCase();
+      return cachedGlobalUsers.filter(u => u.username && u.username.toLowerCase().includes(lowerVal));
+    }
+
+    // Generates the small avatar images for lists and dropdowns
+    function generateUserAvatarBadge(username) {
+      const avatarData = userAvatars[username.toLowerCase()];
+      if (avatarData) {
+        return `<img src="${avatarData}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">`;
+      }
+      return `<div class="avatar small" style="background-color: ${getAvatarColor(username)};">${username.charAt(0).toUpperCase()}</div>`;
+    }
+
+    function handleMentionInput(inputEl) {
+      const cursor = inputEl.selectionStart;
+      const textBeforeCursor = inputEl.value.slice(0, cursor);
+      const match = textBeforeCursor.match(/@([a-zA-Z0-9_]*)$/);
+
+      const suggestionsBox = document.getElementById('mentionSuggestions');
+
+      if (!match) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      const query = match[1];
+      mentionMatchStart = cursor - match[0].length;
+
+      const matches = filterUsersMatching(query, true);
+
+      if (matches.length === 0) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      let html = '';
+      matches.forEach(m => {
+        html += `
+          <div class="suggestion-item" onclick="insertMention('${escapeHtml(m.username)}')">
+            ${generateUserAvatarBadge(m.username)}
+            <span>${escapeHtml(m.username)}</span>
+          </div>
+        `;
+      });
+
+      suggestionsBox.innerHTML = html;
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    function insertMention(username) {
+      const inputEl = document.getElementById('messageInput');
+      const cursor = inputEl.selectionStart;
+      const textBefore = inputEl.value.slice(0, mentionMatchStart);
+      const textAfter = inputEl.value.slice(cursor);
+
+      inputEl.value = `${textBefore}@${username} ${textAfter}`;
+      document.getElementById('mentionSuggestions').classList.add('hidden');
+      inputEl.focus();
+    }
+
+    function handleDmSearchInput(val) {
+      const suggestionsBox = document.getElementById('dmSuggestions');
+      const matches = filterUsersMatching(val.trim());
+
+      if (matches.length === 0 || !val.trim()) {
+        suggestionsBox.classList.add('hidden');
+        suggestionsBox.innerHTML = '';
+        return;
+      }
+
+      let html = '';
+      matches.forEach(m => {
+        html += `
+          <div class="suggestion-item" onclick="selectDmUser('${escapeHtml(m.username)}')">
+            ${generateUserAvatarBadge(m.username)}
+            <span>${escapeHtml(m.username)}</span>
+          </div>
+        `;
+      });
+
+      suggestionsBox.innerHTML = html;
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    function selectDmUser(username) {
+      document.getElementById('dmUsernameInput').value = username;
+      document.getElementById('dmSuggestions').classList.add('hidden');
+    }
+
+    function handleSpaceSearchInput(val) {
+      const suggestionsBox = document.getElementById('spaceSuggestions');
+      const matches = filterUsersMatching(val.trim());
+
+      const filteredMatches = matches.filter(m => 
+        !selectedSpaceMembers.some(already => already.toLowerCase() === m.username.toLowerCase())
+      );
+
+      if (filteredMatches.length === 0 || !val.trim()) {
+        suggestionsBox.classList.add('hidden');
+        suggestionsBox.innerHTML = '';
+        return;
+      }
+
+      let html = '';
+      filteredMatches.forEach(m => {
+        html += `
+          <div class="suggestion-item" onclick="addSpaceMemberTag('${escapeHtml(m.username)}')">
+            ${generateUserAvatarBadge(m.username)}
+            <span>${escapeHtml(m.username)}</span>
+          </div>
+        `;
+      });
+
+      suggestionsBox.innerHTML = html;
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    function addSpaceMemberTag(username) {
+      if (!selectedSpaceMembers.some(m => m.toLowerCase() === username.toLowerCase())) {
+        selectedSpaceMembers.push(username);
+      }
+      document.getElementById('spaceMembersInput').value = '';
+      document.getElementById('spaceSuggestions').classList.add('hidden');
+      renderSpaceSelectedTags();
+    }
+
+    function removeSpaceMemberTag(username) {
+      selectedSpaceMembers = selectedSpaceMembers.filter(m => m.toLowerCase() !== username.toLowerCase());
+      renderSpaceSelectedTags();
+    }
+
+    function renderSpaceSelectedTags() {
+      const container = document.getElementById('spaceSelectedTags');
+      let html = '';
+      selectedSpaceMembers.forEach(m => {
+        html += `
+          <div class="user-tag">
+            <span>${escapeHtml(m)}</span>
+            <span class="remove-tag" onclick="removeSpaceMemberTag('${escapeHtml(m)}')">&times;</span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    function openCreateSpaceModal() {
+      selectedSpaceMembers = [];
+      document.getElementById('newSpaceName').value = '';
+      document.getElementById('spaceMembersInput').value = '';
+      document.getElementById('spaceSuggestions').classList.add('hidden');
+      document.getElementById('spaceModalError').classList.add('hidden');
+      renderSpaceSelectedTags();
+      document.getElementById('spaceModal').classList.remove('hidden');
+      fetchGlobalUsers();
+    }
+
+    async function submitCreateSpace() {
+      const name = document.getElementById('newSpaceName').value.trim();
+      const errBox = document.getElementById('spaceModalError');
+      errBox.classList.add('hidden');
+
+      if (!name) {
+        errBox.innerText = "Please enter a space name.";
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const spaceId = 'space_' + Date.now();
+      
+      const { error } = await supabaseClient
+        .from('spaces')
+        .insert([{ 
+          id: spaceId, 
+          name: name, 
+          created_by: currentUser,
+          members: selectedSpaceMembers,
+          avatar: null
+        }]);
+
+      if (error) {
+        errBox.innerText = error.message;
+        errBox.classList.remove('hidden');
+      } else {
+        spaceCustomMetadata[spaceId] = {
+          name: name,
+          members: [...selectedSpaceMembers]
+        };
+        localStorage.setItem('chat_space_metadata', JSON.stringify(spaceCustomMetadata));
+
+        closeModals();
+        await fetchUserRooms();
+        selectRoom(spaceId, name);
+      }
+    }
+
+    function openNewDmModal() {
+      document.getElementById('dmUsernameInput').value = '';
+      document.getElementById('dmSuggestions').classList.add('hidden');
+      document.getElementById('dmModalError').classList.add('hidden');
+      document.getElementById('dmModal').classList.remove('hidden');
+      fetchGlobalUsers();
+    }
+
+    async function submitStartDm() {
+      const inputVal = document.getElementById('dmUsernameInput').value.trim();
+      const errBox = document.getElementById('dmModalError');
+      errBox.classList.add('hidden');
+
+      if (!inputVal) {
+        errBox.innerText = "Please enter or select a username.";
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      if (inputVal.toLowerCase() === currentUser.toLowerCase()) {
+        errBox.innerText = "You cannot start a DM with yourself.";
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const match = cachedGlobalUsers.find(u => u.username && u.username.toLowerCase() === inputVal.toLowerCase());
+
+      if (!match) {
+        errBox.innerText = `User "${inputVal}" does not exist.`;
+        errBox.classList.remove('hidden');
+        return;
+      }
+
+      const targetUser = match.username;
+      const roomId = getDmRoomId(currentUser, targetUser);
+
+      if (!userDms.some(d => d.id === roomId)) {
+        userDms.push({ id: roomId, otherUser: targetUser });
+      }
+
+      closeModals();
+      selectRoom(roomId, targetUser);
+    }
+
+    function closeModals() {
+      document.getElementById('spaceModal').classList.add('hidden');
+      document.getElementById('dmModal').classList.add('hidden');
+      document.getElementById('settingsModal').classList.add('hidden');
+      document.getElementById('spaceSettingsModal').classList.add('hidden');
+      document.getElementById('dmSettingsModal').classList.add('hidden');
+      document.getElementById('modModal').classList.add('hidden');
+      document.getElementById('userProfileModal').classList.add('hidden');
+      
+      const banSuggestions = document.getElementById('banSuggestions');
+      if (banSuggestions) banSuggestions.classList.add('hidden');
+      const unbanSuggestions = document.getElementById('unbanSuggestions');
+      if (unbanSuggestions) unbanSuggestions.classList.add('hidden');
+      const deleteSuggestions = document.getElementById('deleteSuggestions');
+      if (deleteSuggestions) deleteSuggestions.classList.add('hidden');
+    }
+
+    function getAvatarColor(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      return `hsl(${Math.abs(hash) % 360}, 60%, 45%)`;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function handleKey(e) {
+      if (e.key === 'Enter') sendMessage();
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && currentUser) {
+        const statusDot = document.getElementById('statusDot');
+        if (statusDot) {
+          statusDot.className = 'status-dot';
+          statusDot.style.backgroundColor = '';
+        }
+        fetchMessages();
+      }
+    });
+
+    startPolling();
+  </script>
+</body>
+</html>
