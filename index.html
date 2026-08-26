@@ -1047,6 +1047,21 @@
     }
 
     async function checkBanAndShowApp() {
+      const { data: account, error: accountError } = await supabaseClient
+        .from('users')
+        .select('username')
+        .ilike('username', currentUser)
+        .maybeSingle();
+
+      if (accountError || !account) {
+        localStorage.removeItem('chat_active_user');
+        currentUser = null;
+        document.getElementById('authContainer').classList.remove('hidden');
+        document.getElementById('appContainer').classList.add('hidden');
+        return;
+      }
+
+      currentUser = account.username;
       if (await isUserBanned(currentUser)) {
         alert("You have been banned from Googol Chat.");
         logout();
@@ -1171,17 +1186,24 @@
       const bioInput = document.getElementById('profileModalBio');
       const newBio = bioInput.value.trim();
 
-      userBios[currentUser.toLowerCase()] = newBio;
-      const cached = cachedGlobalUsers.find(u => u.username && u.username.toLowerCase() === currentUser.toLowerCase());
-      if (cached) cached.bio = newBio;
-
       try {
-        await supabaseClient
+        const { data, error } = await supabaseClient
           .from('users')
           .update({ bio: newBio })
-          .ilike('username', currentUser);
+          .ilike('username', currentUser)
+          .select('username')
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error('Your user profile was not found.');
+
+        userBios[currentUser.toLowerCase()] = newBio;
+        const cached = cachedGlobalUsers.find(u => u.username && u.username.toLowerCase() === currentUser.toLowerCase());
+        if (cached) cached.bio = newBio;
       } catch (e) {
         console.error("Failed to save bio:", e);
+        alert("Introduction could not be saved: " + e.message);
+        return;
       }
 
       closeModals();
@@ -2086,8 +2108,23 @@
           if (hDms) hiddenDmTargets = hDms.map(h => h.target_user.toLowerCase());
         } catch(e){}
 
+        const { data: knownUsers, error: knownUsersError } = await supabaseClient
+          .from('users')
+          .select('username');
+        if (knownUsersError) throw knownUsersError;
+
+        const myUser = currentUser.toLowerCase();
+        const validDmUsers = (knownUsers || [])
+          .filter(u => u.username && u.username.toLowerCase() !== myUser)
+          .filter(u => !hiddenDmTargets.includes(u.username.toLowerCase()));
+        const validDmRooms = new Map(
+          validDmUsers.map(u => [getDmRoomId(currentUser, u.username), u.username])
+        );
+
         const savedDms = JSON.parse(localStorage.getItem('chat_dms_' + currentUser.toLowerCase()) || '[]');
-        userDms = savedDms.filter(d => !hiddenDmTargets.includes(d.otherUser.toLowerCase()));
+        userDms = savedDms
+          .filter(d => d && validDmRooms.has(d.id))
+          .map(d => ({ id: d.id, otherUser: validDmRooms.get(d.id) }));
 
         const { data: dmMessages } = await supabaseClient
           .from('messages')
@@ -2096,20 +2133,9 @@
 
         if (dmMessages) {
           dmMessages.forEach(m => {
-            const parts = m.room.split('_');
-            if (parts.length === 3) {
-              const user1 = parts[1].toLowerCase();
-              const user2 = parts[2].toLowerCase();
-              const myUser = currentUser.toLowerCase();
-
-              if (user1 === myUser || user2 === myUser) {
-                const otherUser = user1 === myUser ? parts[2] : parts[1];
-                if (!hiddenDmTargets.includes(otherUser.toLowerCase())) {
-                  if (!userDms.some(d => d.id === m.room)) {
-                    userDms.push({ id: m.room, otherUser: otherUser });
-                  }
-                }
-              }
+            const otherUser = validDmRooms.get(m.room);
+            if (otherUser && !userDms.some(d => d.id === m.room)) {
+              userDms.push({ id: m.room, otherUser: otherUser });
             }
           });
         }
